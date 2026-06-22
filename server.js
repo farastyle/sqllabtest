@@ -584,11 +584,13 @@ function renderMenuXss() {
     let menu = '';
     testesXss.forEach(teste => {
         const payloadHtml = escapeHtml(teste.payload);
+        const nomeHtml = escapeHtml(teste.nome);
+        const descricaoHtml = escapeHtml(teste.descricao);
         menu += `
             <div class="teste-item">
                 <a href="javascript:void(0)" class="teste-link" id="link-${teste.id}" onclick="toggleTesteXss('${teste.id}')">
-                    <strong style="font-size:13px;">${teste.nome}</strong><br>
-                    <small style="opacity:0.7; font-size:11px;">${teste.descricao}</small>
+                    <strong style="font-size:13px;">${nomeHtml}</strong><br>
+                    <small style="opacity:0.7; font-size:11px;">${descricaoHtml}</small>
                 </a>
                 <div class="teste-panel" id="panel-${teste.id}">
                     <p style="margin:6px 0; color:#155724; font-size:12px;"><strong>Onde testar:</strong> ${teste.onde}</p>
