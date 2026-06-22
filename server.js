@@ -644,7 +644,7 @@ const scriptAccordionXss = `
     }
 
     async function resetarMural(sala) {
-        if (!confirm('⚠️ Isso vai restaurar o mural do Lab ' + sala + ' para os comentários originais, afetando todos os alunos dessa sala. Continuar?')) {
+        if (!confirm('⚠️ Isso vai restaurar o mural do Lab ' + sala + ' e também o catálogo de produtos (usado por TODOS os alunos, inclusive no lab de SQLi). Continuar?')) {
             return;
         }
         try {
@@ -732,6 +732,7 @@ app.get('/xss/:sala', (req, res) => {
                             <li>Cole o payload na <strong>Busca de Produtos</strong> (XSS Refletido) ou no <strong>Mural de Recados</strong> (XSS Armazenado)</li>
                             <li>Observe o que acontece na tela (ou no Console do navegador, em alguns casos)</li>
                             <li>No mural, o payload fica salvo no banco e afeta só quem estiver no <strong>Lab ${sala}</strong>!</li>
+                            <li>Se algo der errado ou a página ficar "quebrada" demais, os testes podem ser resetados a qualquer momento clicando no botão de reset mais abaixo no menu lateral (👇)</li>
                         </ol>
                     </div>
 
@@ -898,7 +899,9 @@ app.post('/xss/:sala/mural', async (req, res) => {
     }
 });
 
-// 4. ROTA PARA RESETAR O MURAL DE UMA SALA (restaura só os comentários originais daquela sala)
+// 4. ROTA PARA RESETAR O MURAL DE UMA SALA (restaura os comentários originais daquela sala
+//    e também o catálogo de produtos, já que a Busca usa essa mesma tabela e ela é compartilhada
+//    com o lab de SQLi — sem isso, um teste de SQLi anterior poderia deixar a busca "estranha")
 app.post('/xss/:sala/reset', async (req, res) => {
     const { sala } = req.params;
     const client = await pool.connect();
@@ -910,8 +913,14 @@ app.post('/xss/:sala/reset', async (req, res) => {
             await client.query('INSERT INTO mural_comentarios (autor, mensagem, sala) VALUES ($1, $2, $3)', [c.autor, c.mensagem, sala]);
         }
 
+        await client.query('DELETE FROM produtos');
+        await client.query('ALTER SEQUENCE produtos_id_seq RESTART WITH 1');
+        for (const p of SEED_PRODUTOS) {
+            await client.query('INSERT INTO produtos (nome, preco, oculto) VALUES ($1, $2, $3)', [p.nome, p.preco, p.oculto]);
+        }
+
         await client.query('COMMIT');
-        res.json({ sucesso: true, mensagem: `✅ Mural do Lab ${sala} resetado com sucesso! Comentários voltaram ao estado original.` });
+        res.json({ sucesso: true, mensagem: `✅ Mural do Lab ${sala} e catálogo de produtos resetados com sucesso! Tudo voltou ao estado original.` });
     } catch (error) {
         await client.query('ROLLBACK');
         res.status(500).json({ sucesso: false, erro: error.message });
