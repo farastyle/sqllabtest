@@ -74,8 +74,38 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
-// 1. TELA DE LOGIN (FRONT-END EMBUTIDO)
+// 0. HUB DE SELEÇÃO DE LABORATÓRIOS
 app.get('/', (req, res) => {
+    res.send(`
+        <div style="font-family: sans-serif; max-width: 800px; margin: 60px auto; padding: 20px;">
+            <div style="text-align: center; padding: 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 8px; margin-bottom: 40px;">
+                <h1 style="margin: 0; font-size: 32px;">🔬 Laboratórios de Segurança</h1>
+                <p style="margin: 10px 0 0 0; font-size: 18px; opacity: 0.9;">Escolha o laboratório da aula de hoje</p>
+            </div>
+
+            <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                <a href="/sqli" style="flex: 1; min-width: 280px; text-decoration: none; display: block; background: white; border: 2px solid #667eea; border-radius: 8px; padding: 30px; text-align: center; color: #333; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: transform 0.2s;">
+                    <div style="font-size: 48px;">💉</div>
+                    <h2 style="margin: 10px 0 5px 0; color: #667eea;">SQL Injection</h2>
+                    <p style="color: #666; font-size: 14px;">Login bypass, UNION SELECT, blind injection e mais 10 testes práticos.</p>
+                </a>
+                <a href="/xss" style="flex: 1; min-width: 280px; text-decoration: none; display: block; background: white; border: 2px solid #28a745; border-radius: 8px; padding: 30px; text-align: center; color: #333; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: transform 0.2s;">
+                    <div style="font-size: 48px;">🧪</div>
+                    <h2 style="margin: 10px 0 5px 0; color: #28a745;">Cross-Site Scripting (XSS)</h2>
+                    <p style="color: #666; font-size: 14px;">XSS Refletido na busca e XSS Armazenado no mural de comentários.</p>
+                </a>
+            </div>
+
+            <div style="text-align: center; margin-top: 30px; color: #999; font-size: 12px;">
+                <p>⚠️ <strong>Aviso:</strong> Estes laboratórios são fornecidos apenas para fins educacionais.<br>
+                Não use estas técnicas em ambientes de produção sem autorização!</p>
+            </div>
+        </div>
+    `);
+});
+
+// 1. TELA DE LOGIN (FRONT-END EMBUTIDO)
+app.get('/sqli', (req, res) => {
     // Permite pré-preencher o campo de e-mail (usado pelo botão "Ir para o Login" do teste 1 no dashboard)
     const emailPrefill = escapeHtml(req.query.email || '');
 
@@ -164,7 +194,7 @@ app.post('/login', async (req, res) => {
                     <p style="font-size: 18px;">Perfil no Sistema: <strong>${resultado.rows[0].perfil}</strong></p>
                     <br>
                     <a href="/dashboard" style="padding:12px 25px; background:#28a745; color:white; text-decoration:none; border-radius:4px; font-weight:bold;">🛒 Ir para a Loja</a>
-                    <a href="/" style="padding:12px 25px; margin-left:10px; background:#6c757d; color:white; text-decoration:none; border-radius:4px;">Voltar</a>
+                    <a href="/sqli" style="padding:12px 25px; margin-left:10px; background:#6c757d; color:white; text-decoration:none; border-radius:4px;">Voltar</a>
                 </div>
             `);
         } else {
@@ -173,7 +203,7 @@ app.post('/login', async (req, res) => {
                     <h1 style="color: red;">❌ Erro de Autenticação</h1>
                     <p style="font-size: 18px;">Usuário ou senha inválidos.</p>
                     <br>
-                    <a href="/" style="padding:10px 20px; background:#007bff; color:white; text-decoration:none; border-radius:4px;">Tentar novamente</a>
+                    <a href="/sqli" style="padding:10px 20px; background:#007bff; color:white; text-decoration:none; border-radius:4px;">Tentar novamente</a>
                 </div>
             `);
         }
@@ -185,7 +215,7 @@ app.post('/login', async (req, res) => {
                 <p><strong>Query que causou o erro:</strong></p>
                 <pre style="background:#fff; padding:15px; border:1px solid #ddd; overflow-x:auto;"><code>${query}</code></pre>
                 <br>
-                <a href="/" style="padding:10px 20px; background:#721c24; color:white; text-decoration:none; border-radius:4px;">Voltar</a>
+                <a href="/sqli" style="padding:10px 20px; background:#721c24; color:white; text-decoration:none; border-radius:4px;">Voltar</a>
             </div>
         `);
     }
@@ -288,7 +318,7 @@ app.get('/dashboard', async (req, res) => {
                     <p>Clique em um teste para ver o payload (abre embaixo do item, fechando o anterior)</p>
                     ${menu}
                     <button class="reset-btn" onclick="resetarDados()">🔄 Resetar Dados do Laboratório</button>
-                    <a href="/" class="logout">🚪 Logout</a>
+                    <a href="/sqli" class="logout">🚪 Logout</a>
                 </div>
 
                 <!-- MAIN CONTENT -->
@@ -510,7 +540,7 @@ app.get('/produtos', async (req, res) => {
                     </tbody>
                 </table>
                 <br>
-                <a href="/" style="color:#007bff; text-decoration:none;">← Voltar para o Login</a>
+                <a href="/sqli" style="color:#007bff; text-decoration:none;">← Voltar para o Login</a>
             </div>
         `);
     } catch (error) {
@@ -524,6 +554,281 @@ app.get('/produtos', async (req, res) => {
                 <a href="/produtos" style="padding:10px 20px; background:#721c24; color:white; text-decoration:none; border-radius:4px;">Voltar</a>
             </div>
         `);
+    }
+});
+
+// ============================================================
+// LABORATÓRIO DE XSS (Cross-Site Scripting)
+// ============================================================
+
+const SEED_COMENTARIOS = [
+    { autor: 'Professor', mensagem: 'Bem-vindo ao Mural do Laboratório! Use os payloads da barra lateral para testar o XSS Armazenado aqui. 🔬' },
+    { autor: 'Aluno Teste', mensagem: 'Esse curso está muito bom, aprendendo bastante sobre segurança!' }
+];
+
+// 10 testes de XSS para a barra lateral (acordeão, igual ao lab de SQLi)
+const testesXss = [
+    { id: 'xss1', nome: '1️⃣ Alert Básico', payload: `<script>alert('XSS')</script>`, onde: 'Busca e Mural', descricao: 'O clássico pop-up que prova a execução de JavaScript' },
+    { id: 'xss2', nome: '2️⃣ Exibir Cookies', payload: `<script>alert(document.cookie)</script>`, onde: 'Busca e Mural', descricao: 'Mostra que um script injetado pode ler dados sensíveis da página' },
+    { id: 'xss3', nome: '3️⃣ Manipulação de DOM (Título)', payload: `<script>document.title = 'Hackeado pelo XSS!'</script>`, onde: 'Busca e Mural', descricao: 'Altera elementos da página sem precisar de pop-up' },
+    { id: 'xss4', nome: '4️⃣ Defacement da Página', payload: `<script>document.body.innerHTML = '<h1 style=\"color:red;text-align:center;margin-top:100px;\">💀 Site Hackeado!</h1>'</script>`, onde: 'Mural', descricao: 'Substitui todo o conteúdo visível da página' },
+    { id: 'xss5', nome: '5️⃣ Caixa de Login Falsa (Phishing)', payload: `<script>document.body.innerHTML = '<div style="text-align:center;margin-top:100px;font-family:sans-serif;"><h2>⚠️ Sessão expirada. Faça login novamente:</h2><form><input placeholder="Email" style="padding:10px;display:block;margin:10px auto;width:250px;"><input placeholder="Senha" type="password" style="padding:10px;display:block;margin:10px auto;width:250px;"><button style="padding:10px 20px;">Entrar</button></form></div>'</script>`, onde: 'Mural', descricao: 'Engenharia social: simula uma tela de login para roubar credenciais' },
+    { id: 'xss6', nome: '6️⃣ IMG com onerror (sem <script>)', payload: `<img src="x" onerror="alert('XSS via atributo de IMG')">`, onde: 'Busca e Mural', descricao: 'Filtros que bloqueiam só a tag <script> não impedem este payload' },
+    { id: 'xss7', nome: '7️⃣ SVG com onload', payload: `<svg onload="alert('XSS via SVG')"></svg>`, onde: 'Busca e Mural', descricao: 'Outra forma de executar JS sem usar a tag <script>' },
+    { id: 'xss8', nome: '8️⃣ Redirecionamento Malicioso', payload: `<script>alert('Você será redirecionado!'); window.location='https://exemplo.com'</script>`, onde: 'Mural', descricao: 'Simula um redirect para um site de phishing controlado pelo atacante' },
+    { id: 'xss9', nome: '9️⃣ Div com Evento onmouseover', payload: `<div onmouseover="alert('XSS ao passar o mouse!')" style="background:#ffeb3b;padding:20px;">Passe o mouse aqui</div>`, onde: 'Mural', descricao: 'XSS que só dispara com interação do usuário (evento de mouse)' },
+    { id: 'xss10', nome: '🔟 Keylogger Simples', payload: `<script>document.onkeypress = function(e){ console.log('Tecla digitada: ' + e.key); }</script>`, onde: 'Mural', descricao: 'Captura tudo que a vítima digitar na página depois do comentário ser carregado (veja no Console do navegador)' }
+];
+
+function renderMenuXss() {
+    let menu = '';
+    testesXss.forEach(teste => {
+        const payloadHtml = escapeHtml(teste.payload);
+        menu += `
+            <div class="teste-item">
+                <a href="javascript:void(0)" class="teste-link" id="link-${teste.id}" onclick="toggleTesteXss('${teste.id}')">
+                    <strong style="font-size:13px;">${teste.nome}</strong><br>
+                    <small style="opacity:0.7; font-size:11px;">${teste.descricao}</small>
+                </a>
+                <div class="teste-panel" id="panel-${teste.id}">
+                    <p style="margin:6px 0; color:#155724; font-size:12px;"><strong>Onde testar:</strong> ${teste.onde}</p>
+                    <code style="background:white; padding:8px; border-radius:4px; display:block; word-break:break-all; font-size:11px; border:1px solid #28a745; white-space:pre-wrap;">${payloadHtml}</code>
+                    <p style="margin:8px 0 0 0; color:#856404; font-size:11px;">✋ Copie e cole na busca ou no campo de mensagem do mural.</p>
+                </div>
+            </div>
+        `;
+    });
+    return menu;
+}
+
+const sidebarStyleXss = `
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: sans-serif; background: white; }
+    .container { display: flex; min-height: 100vh; }
+    .sidebar { width: 300px; background: #f5f5f5; padding: 20px; overflow-y: auto; border-right: 2px solid #ddd; }
+    .main { flex: 1; padding: 30px; overflow-y: auto; background: white; }
+    .sidebar h2 { margin-top: 0; margin-bottom: 10px; color: #333; font-size: 16px; }
+    .sidebar p { font-size: 12px; color: #666; margin-bottom: 15px; }
+    .teste-item { margin: 8px 0; }
+    .teste-link { display:block; padding:12px; border-radius:4px; text-decoration:none; background:#f9f9f9; border:1px solid #ddd; color:#333; cursor:pointer; transition:all 0.2s; }
+    .teste-link.active { background:#28a745; color:white; border:2px solid #1e7e34; }
+    .teste-panel { display:none; background:#e9f7ef; padding:12px; border-radius:4px; margin-top:6px; border-left:4px solid #28a745; }
+    .teste-panel.open { display:block; }
+    .reset-btn { display:block; width:100%; text-align:center; padding:12px; background:#fd7e14; color:white; border:none; border-radius:4px; margin-top:20px; font-weight:bold; cursor:pointer; font-size:13px; text-decoration: none; }
+    .nav-link { display:block; text-align:center; padding:10px; background:#6c757d; color:white; text-decoration:none; border-radius:4px; margin-top:10px; font-size: 13px; }
+`;
+
+const scriptAccordionXss = `
+    let testeAbertoXss = null;
+    function toggleTesteXss(id) {
+        const painelNovo = document.getElementById('panel-' + id);
+        const linkNovo = document.getElementById('link-' + id);
+        const reabrindoMesmo = testeAbertoXss === id;
+
+        if (testeAbertoXss) {
+            document.getElementById('panel-' + testeAbertoXss).classList.remove('open');
+            document.getElementById('link-' + testeAbertoXss).classList.remove('active');
+        }
+
+        if (reabrindoMesmo) {
+            testeAbertoXss = null;
+        } else {
+            painelNovo.classList.add('open');
+            linkNovo.classList.add('active');
+            testeAbertoXss = id;
+        }
+    }
+
+    async function resetarMural() {
+        if (!confirm('⚠️ Isso vai restaurar o mural para os comentários originais, afetando TODOS os alunos conectados agora. Continuar?')) {
+            return;
+        }
+        try {
+            const response = await fetch('/xss/reset', { method: 'POST' });
+            const resultado = await response.json();
+            alert(resultado.mensagem || resultado.erro);
+            window.location.reload();
+        } catch (err) {
+            alert('❌ Erro ao resetar: ' + err.message);
+        }
+    }
+`;
+
+// 1. DASHBOARD DO LAB DE XSS (menu lateral com os 10 testes + acesso às 2 rotas vulneráveis)
+app.get('/xss', (req, res) => {
+    res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Laboratório XSS - Dashboard</title>
+            <style>${sidebarStyleXss}</style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="sidebar">
+                    <h2>🧪 10 Testes XSS</h2>
+                    <p>Clique em um teste para ver o payload (abre embaixo do item, fechando o anterior)</p>
+                    ${renderMenuXss()}
+                    <button class="reset-btn" onclick="resetarMural()">🔄 Resetar Mural do Laboratório</button>
+                    <a href="/" class="nav-link">🏠 Voltar ao Hub</a>
+                </div>
+
+                <div class="main">
+                    <div style="text-align: center; padding: 30px; background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%); color: white; border-radius: 8px; margin-bottom: 30px;">
+                        <h1 style="margin: 0; font-size: 28px;">🧪 Laboratório de Práticas</h1>
+                        <p style="margin: 10px 0 0 0; font-size: 16px; opacity: 0.9;">Cross-Site Scripting (XSS) - Aula Prática de Segurança</p>
+                    </div>
+
+                    <div style="background: #f0fff4; border-left: 4px solid #28a745; padding: 20px; margin-bottom: 30px; border-radius: 4px;">
+                        <h3 style="color: #28a745; margin-top: 0;">📚 Como Usar:</h3>
+                        <ol style="color: #555; line-height: 1.8; margin: 10px 0;">
+                            <li>Escolha um payload no menu lateral (👈 são 10 testes diferentes)</li>
+                            <li>Cole o payload na <strong>Busca de Produtos</strong> (XSS Refletido) ou no <strong>Mural de Recados</strong> (XSS Armazenado)</li>
+                            <li>Observe o que acontece na tela (ou no Console do navegador, em alguns casos)</li>
+                            <li>No mural, o payload fica salvo no banco e afeta todo mundo que visitar a página depois!</li>
+                        </ol>
+                    </div>
+
+                    <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                        <a href="/xss/buscar" style="flex: 1; min-width: 240px; text-decoration: none; display: block; background: white; border: 2px solid #007bff; border-radius: 8px; padding: 25px; text-align: center; color: #333; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                            <div style="font-size: 36px;">🔍</div>
+                            <h3 style="margin: 10px 0 5px 0; color: #007bff;">Busca de Produtos</h3>
+                            <p style="color: #666; font-size: 13px;">XSS Refletido — o termo buscado aparece direto na resposta da página</p>
+                        </a>
+                        <a href="/xss/mural" style="flex: 1; min-width: 240px; text-decoration: none; display: block; background: white; border: 2px solid #28a745; border-radius: 8px; padding: 25px; text-align: center; color: #333; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                            <div style="font-size: 36px;">📝</div>
+                            <h3 style="margin: 10px 0 5px 0; color: #28a745;">Mural de Recados</h3>
+                            <p style="color: #666; font-size: 13px;">XSS Armazenado — o que você escrever fica salvo e é exibido para todos</p>
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <script>${scriptAccordionXss}</script>
+        </body>
+        </html>
+    `);
+});
+
+// 2. ROTA DE BUSCA VULNERÁVEL A XSS REFLETIDO
+//    O ERRO INTENCIONAL: o termo buscado volta na resposta sem nenhum escape de HTML
+app.get('/xss/buscar', (req, res) => {
+    const termo = req.query.termo || '';
+
+    res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Busca de Produtos - Lab XSS</title>
+        </head>
+        <body style="font-family: sans-serif; max-width: 800px; margin: 40px auto; padding: 20px;">
+            <h2>🔍 Busca de Produtos (XSS Refletido)</h2>
+            <p style="color:#666;">O termo buscado é exibido na tela exatamente como foi digitado.</p>
+
+            <form action="/xss/buscar" method="GET" style="margin-bottom: 20px; display: flex; gap: 10px;">
+                <input type="text" name="termo" value="${termo}" style="flex: 1; padding:12px; border: 1px solid #ccc; border-radius:4px;" placeholder="Pesquisar produto... ou insira um payload XSS!">
+                <button type="submit" style="padding:12px 25px; background:#007bff; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Buscar</button>
+            </form>
+
+            <div style="background:#f8f9fa; border: 1px solid #ddd; border-radius: 4px; padding: 20px;">
+                <p style="color:#666; margin-top:0;">Resultado da busca para: <strong>${termo}</strong></p>
+                <p style="color:#999;">Nenhum produto encontrado com esse termo.</p>
+            </div>
+            <br>
+            <a href="/xss" style="color:#28a745; text-decoration:none;">← Voltar para o Laboratório</a>
+        </body>
+        </html>
+    `);
+});
+
+// 3. ROTA DO MURAL VULNERÁVEL A XSS ARMAZENADO (GET lista os comentários / POST salva um novo)
+//    O ERRO INTENCIONAL: salva o texto puro no banco e renderiza o HTML/JS de volta sem escapar
+app.get('/xss/mural', async (req, res) => {
+    let comentariosHtml = '';
+    try {
+        const resultado = await pool.query('SELECT * FROM mural_comentarios ORDER BY id');
+        resultado.rows.forEach(c => {
+            comentariosHtml += `
+                <div style="background:white; border:1px solid #ddd; border-radius:4px; padding:15px; margin-bottom:12px;">
+                    <strong style="color:#28a745;">${c.autor}</strong>
+                    <span style="color:#999; font-size:11px;"> — ${new Date(c.criado_em).toLocaleString('pt-BR')}</span>
+                    <p style="margin-top:8px; color:#333;">${c.mensagem}</p>
+                </div>
+            `;
+        });
+    } catch (error) {
+        comentariosHtml = `<p style="color:#d9534f;">❌ Erro ao carregar comentários: ${error.message}</p>`;
+    }
+
+    res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Mural de Recados - Lab XSS</title>
+        </head>
+        <body style="font-family: sans-serif; max-width: 800px; margin: 40px auto; padding: 20px;">
+            <h2>📝 Mural de Recados (XSS Armazenado)</h2>
+            <p style="color:#666;">Tudo que for postado aqui é salvo no banco e exibido para todos os visitantes.</p>
+
+            <form action="/xss/mural" method="POST" style="background:#f8f9fa; border: 1px solid #ddd; border-radius: 4px; padding: 20px; margin-bottom: 25px;">
+                <label style="font-weight:bold; display:block; margin-bottom:6px;">Seu nome:</label>
+                <input type="text" name="autor" required style="width:100%; padding:10px; margin-bottom:14px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box;" placeholder="Ex: Aluno Teste">
+
+                <label style="font-weight:bold; display:block; margin-bottom:6px;">Mensagem:</label>
+                <textarea name="mensagem" required rows="3" style="width:100%; padding:10px; margin-bottom:14px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box;" placeholder="Escreva uma mensagem... ou insira um payload XSS!"></textarea>
+
+                <button type="submit" style="padding:12px 25px; background:#28a745; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Publicar</button>
+            </form>
+
+            <h3 style="color:#333;">Comentários:</h3>
+            ${comentariosHtml || '<p style="color:#999;">Nenhum comentário ainda.</p>'}
+
+            <br>
+            <a href="/xss" style="color:#28a745; text-decoration:none;">← Voltar para o Laboratório</a>
+        </body>
+        </html>
+    `);
+});
+
+app.post('/xss/mural', async (req, res) => {
+    const { autor, mensagem } = req.body;
+
+    try {
+        await pool.query('INSERT INTO mural_comentarios (autor, mensagem) VALUES ($1, $2)', [autor, mensagem]);
+        res.redirect('/xss/mural');
+    } catch (error) {
+        res.status(500).send(`
+            <div style="font-family: monospace; background:#f8d7da; padding:30px; margin:50px auto; max-width: 800px; border-radius:8px; border: 1px solid #f5c6cb;">
+                <h3 style="color: #721c24; margin-top:0;">💥 Erro ao salvar comentário!</h3>
+                <p><strong>Mensagem do Postgres:</strong> <span style="color:red;">${error.message}</span></p>
+                <br>
+                <a href="/xss/mural" style="padding:10px 20px; background:#721c24; color:white; text-decoration:none; border-radius:4px;">Voltar</a>
+            </div>
+        `);
+    }
+});
+
+// 4. ROTA PARA RESETAR O MURAL DO LABORATÓRIO (restaura comentários originais)
+app.post('/xss/reset', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        await client.query('DELETE FROM mural_comentarios');
+        await client.query('ALTER SEQUENCE mural_comentarios_id_seq RESTART WITH 1');
+        for (const c of SEED_COMENTARIOS) {
+            await client.query('INSERT INTO mural_comentarios (autor, mensagem) VALUES ($1, $2)', [c.autor, c.mensagem]);
+        }
+
+        await client.query('COMMIT');
+        res.json({ sucesso: true, mensagem: '✅ Mural resetado com sucesso! Comentários voltaram ao estado original.' });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ sucesso: false, erro: error.message });
+    } finally {
+        client.release();
     }
 });
 
