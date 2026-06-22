@@ -579,7 +579,7 @@ const testesXss = [
     { id: 'xss7', nome: '7️⃣ SVG com onload', payload: `<svg onload="alert('Este script foi escondido dentro de um desenho SVG e mesmo assim foi executado - isso não deveria ser possível')"></svg>`, onde: 'Busca e Mural', descricao: 'Outro exemplo de código escondido em uma tag que parece inofensiva (um desenho/ícone), reforçando que filtros simples não bastam' },
     { id: 'xss8', nome: '8️⃣ Redirecionamento Malicioso', payload: `<script>alert('Você está prestes a ser redirecionado para um site diferente, sem ter clicado em nada - isso não deveria ser possível'); window.location='https://exemplo.com'</script>`, onde: 'Mural', descricao: 'Mostra que o código injetado pode mandar a vítima para outro endereço (um site falso de phishing, por exemplo) sem ela pedir isso' },
     { id: 'xss9', nome: '9️⃣ Div com Evento onmouseover', payload: `<div onmouseover="alert('Você só passou o mouse aqui e um script foi executado - isso não deveria ser possível')" style="background:#ffeb3b;padding:20px;">Passe o mouse sobre esta caixa amarela</div>`, onde: 'Mural', descricao: 'Mostra que o ataque nem sempre precisa de clique: passar o mouse por cima de uma área já é suficiente para disparar o código' },
-    { id: 'xss10', nome: '🔟 Keylogger Simples', payload: `<script>alert('A partir de agora, tudo o que você digitar nesta página será registrado em segredo - isso não deveria ser possível'); document.onkeypress = function(e){ console.log('Tecla digitada capturada pelo invasor: ' + e.key); }</script>`, onde: 'Mural', descricao: 'O caso mais perigoso: o código fica "espionando" o teclado da vítima depois que ela sai da página. Abra o Console do navegador (F12) e digite algo para ver as teclas sendo capturadas' }
+    { id: 'xss10', nome: '🔟 Keylogger Simples', payload: `<script>alert('A partir de agora, tudo o que você digitar nesta página será registrado em segredo - isso não deveria ser possível'); document.onkeypress = function(e){ console.log('Tecla digitada capturada pelo invasor: ' + e.key); var painel = document.getElementById('monitor-log'); if (painel) { var linha = document.createElement('div'); linha.textContent = '> tecla capturada: ' + e.key; painel.appendChild(linha); painel.scrollTop = painel.scrollHeight; } }</script>`, onde: 'Mural', descricao: 'O caso mais perigoso: o código fica "espionando" o teclado de quem visitar o mural depois. Veja o Painel de Monitoramento ao lado do formulário (ele só se ativa depois que este payload for publicado em algum comentário)' }
 ];
 
 function renderMenuXss() {
@@ -845,30 +845,14 @@ app.get('/xss/:sala/mural', async (req, res) => {
 
                 <div style="flex: 1; min-width: 260px; position: sticky; top: 20px;">
                     <div style="background:#1e1e1e; color:#0f0; border-radius:6px; padding:15px; font-family: monospace; font-size:12px;">
-                        <strong style="color:#fff; font-family:sans-serif; display:block; margin-bottom:8px;">📡 Painel de Monitoramento (Demonstração)</strong>
-                        <p style="color:#ccc; font-family:sans-serif; font-size:11px; margin: 0 0 10px 0;">Isto simula o que um invasor veria com o <strong>Teste 10 (Keylogger)</strong> ativo: tudo que você digitar nesta página aparece aqui, em tempo real. É só uma demonstração visual feita pelo próprio laboratório — não envia nada para fora.</p>
+                        <strong style="color:#fff; font-family:sans-serif; display:block; margin-bottom:8px;">📡 Painel de Monitoramento</strong>
+                        <p style="color:#ccc; font-family:sans-serif; font-size:11px; margin: 0 0 10px 0;">Este painel é apenas um espaço vazio — ele só passa a registrar o que você digita se <strong>alguém já tiver publicado o payload do Teste 10 (Keylogger)</strong> em algum comentário deste mural. É o próprio código do invasor que liga o monitoramento, não o laboratório.</p>
                         <div id="monitor-log" style="background:#000; border-radius:4px; padding:10px; height:180px; overflow-y:auto; word-break:break-all;">
-                            <span style="color:#777;">&gt; aguardando você digitar algo no formulário...</span>
+                            <span style="color:#777;">&gt; nenhum keylogger ativo neste mural agora.</span>
                         </div>
                     </div>
                 </div>
             </div>
-
-            <script>
-                const monitorLog = document.getElementById('monitor-log');
-                let monitorIniciado = false;
-                document.addEventListener('keypress', function(e) {
-                    if (!monitorIniciado) {
-                        monitorLog.innerHTML = '';
-                        monitorIniciado = true;
-                    }
-                    const tecla = e.key === ' ' ? '[espaço]' : e.key;
-                    const linha = document.createElement('div');
-                    linha.textContent = '> tecla capturada: ' + tecla;
-                    monitorLog.appendChild(linha);
-                    monitorLog.scrollTop = monitorLog.scrollHeight;
-                });
-            </script>
         </body>
         </html>
     `);
