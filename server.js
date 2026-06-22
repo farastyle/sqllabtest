@@ -756,10 +756,31 @@ app.get('/xss/:sala', (req, res) => {
 });
 
 // 2. ROTA DE BUSCA VULNERÁVEL A XSS REFLETIDO
-//    O ERRO INTENCIONAL: o termo buscado volta na resposta sem nenhum escape de HTML
-app.get('/xss/:sala/buscar', (req, res) => {
+//    A busca em si usa consulta parametrizada (não é o foco deste lab), mas o termo
+//    digitado volta na tela sem nenhum escape de HTML — esse é o ERRO INTENCIONAL.
+app.get('/xss/:sala/buscar', async (req, res) => {
     const { sala } = req.params;
     const termo = req.query.termo || '';
+
+    let resultadosHtml = '<p style="color:#999;">Digite um termo e clique em Buscar para ver os produtos.</p>';
+    if (termo) {
+        try {
+            const resultado = await pool.query(
+                'SELECT nome, preco FROM produtos WHERE oculto = false AND nome ILIKE $1 ORDER BY nome',
+                [`%${termo}%`]
+            );
+            if (resultado.rows.length === 0) {
+                resultadosHtml = '<p style="color:#999;">Nenhum produto encontrado com esse termo.</p>';
+            } else {
+                resultadosHtml = '<table style="width:100%; border-collapse: collapse;">' +
+                    '<thead><tr style="background:#f2f2f2;"><th style="padding:10px; border:1px solid #ddd; text-align:left;">Produto</th><th style="padding:10px; border:1px solid #ddd; text-align:left;">Preço</th></tr></thead><tbody>' +
+                    resultado.rows.map(p => `<tr><td style="padding:10px; border:1px solid #ddd;">${escapeHtml(p.nome)}</td><td style="padding:10px; border:1px solid #ddd;">R$ ${p.preco}</td></tr>`).join('') +
+                    '</tbody></table>';
+            }
+        } catch (error) {
+            resultadosHtml = `<p style="color:#d9534f;">❌ Erro ao buscar: ${escapeHtml(error.message)}</p>`;
+        }
+    }
 
     res.send(`
         <!DOCTYPE html>
@@ -770,7 +791,7 @@ app.get('/xss/:sala/buscar', (req, res) => {
         </head>
         <body style="font-family: sans-serif; max-width: 800px; margin: 40px auto; padding: 20px;">
             <h2>🔍 Busca de Produtos (XSS Refletido) — Lab ${sala}</h2>
-            <p style="color:#666;">O termo buscado é exibido na tela exatamente como foi digitado.</p>
+            <p style="color:#666;">Pesquise produtos do catálogo. O termo buscado é exibido na tela exatamente como foi digitado.</p>
 
             <form action="/xss/${sala}/buscar" method="GET" style="margin-bottom: 20px; display: flex; gap: 10px;">
                 <input type="text" name="termo" value="${termo}" style="flex: 1; padding:12px; border: 1px solid #ccc; border-radius:4px;" placeholder="Pesquisar produto... ou insira um payload XSS!">
@@ -779,7 +800,7 @@ app.get('/xss/:sala/buscar', (req, res) => {
 
             <div style="background:#f8f9fa; border: 1px solid #ddd; border-radius: 4px; padding: 20px;">
                 <p style="color:#666; margin-top:0;">Resultado da busca para: <strong>${termo}</strong></p>
-                <p style="color:#999;">Nenhum produto encontrado com esse termo.</p>
+                ${resultadosHtml}
             </div>
             <br>
             <a href="/xss/${sala}" style="color:#28a745; text-decoration:none;">← Voltar para o Laboratório</a>
