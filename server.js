@@ -815,25 +815,60 @@ app.get('/xss/:sala/mural', async (req, res) => {
             <meta charset="UTF-8">
             <title>Mural de Recados - Lab XSS ${sala}</title>
         </head>
-        <body style="font-family: sans-serif; max-width: 800px; margin: 40px auto; padding: 20px;">
+        <body style="font-family: sans-serif; max-width: 1100px; margin: 40px auto; padding: 20px;">
             <h2>📝 Mural de Recados (XSS Armazenado) — Lab ${sala}</h2>
             <p style="color:#666;">Tudo que for postado aqui é salvo no banco e exibido só para quem estiver no Lab ${sala}.</p>
 
-            <form action="/xss/${sala}/mural" method="POST" style="background:#f8f9fa; border: 1px solid #ddd; border-radius: 4px; padding: 20px; margin-bottom: 25px;">
-                <label style="font-weight:bold; display:block; margin-bottom:6px;">Seu nome:</label>
-                <input type="text" name="autor" required style="width:100%; padding:10px; margin-bottom:14px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box;" placeholder="Ex: Aluno Teste">
+            <div style="background: #fffbea; border-left: 4px solid #ffc107; padding: 15px 20px; margin-bottom: 25px; border-radius: 4px;">
+                <strong style="color:#856404;">💡 Dica de uso:</strong>
+                <span style="color:#555;"> depois de publicar um payload, role até o formulário e tente preenchê-lo <strong>normalmente</strong> (como se fosse postar um comentário de verdade) para ver o que acontece com a página.</span>
+            </div>
 
-                <label style="font-weight:bold; display:block; margin-bottom:6px;">Mensagem:</label>
-                <textarea name="mensagem" required rows="3" style="width:100%; padding:10px; margin-bottom:14px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box;" placeholder="Escreva uma mensagem... ou insira um payload XSS!"></textarea>
+            <div style="display:flex; gap:25px; align-items:flex-start;">
+                <div style="flex: 2; min-width: 0;">
+                    <form action="/xss/${sala}/mural" method="POST" style="background:#f8f9fa; border: 1px solid #ddd; border-radius: 4px; padding: 20px; margin-bottom: 25px;">
+                        <label style="font-weight:bold; display:block; margin-bottom:6px;">Seu nome:</label>
+                        <input type="text" name="autor" required style="width:100%; padding:10px; margin-bottom:14px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box;" placeholder="Ex: Aluno Teste">
 
-                <button type="submit" style="padding:12px 25px; background:#28a745; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Publicar</button>
-            </form>
+                        <label style="font-weight:bold; display:block; margin-bottom:6px;">Mensagem:</label>
+                        <textarea name="mensagem" required rows="3" style="width:100%; padding:10px; margin-bottom:14px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box;" placeholder="Escreva uma mensagem... ou insira um payload XSS!"></textarea>
 
-            <h3 style="color:#333;">Comentários:</h3>
-            ${comentariosHtml || '<p style="color:#999;">Nenhum comentário ainda.</p>'}
+                        <button type="submit" style="padding:12px 25px; background:#28a745; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Publicar</button>
+                    </form>
 
-            <br>
-            <a href="/xss/${sala}" style="color:#28a745; text-decoration:none;">← Voltar para o Laboratório</a>
+                    <h3 style="color:#333;">Comentários:</h3>
+                    ${comentariosHtml || '<p style="color:#999;">Nenhum comentário ainda.</p>'}
+
+                    <br>
+                    <a href="/xss/${sala}" style="color:#28a745; text-decoration:none;">← Voltar para o Laboratório</a>
+                </div>
+
+                <div style="flex: 1; min-width: 260px; position: sticky; top: 20px;">
+                    <div style="background:#1e1e1e; color:#0f0; border-radius:6px; padding:15px; font-family: monospace; font-size:12px;">
+                        <strong style="color:#fff; font-family:sans-serif; display:block; margin-bottom:8px;">📡 Painel de Monitoramento (Demonstração)</strong>
+                        <p style="color:#ccc; font-family:sans-serif; font-size:11px; margin: 0 0 10px 0;">Isto simula o que um invasor veria com o <strong>Teste 10 (Keylogger)</strong> ativo: tudo que você digitar nesta página aparece aqui, em tempo real. É só uma demonstração visual feita pelo próprio laboratório — não envia nada para fora.</p>
+                        <div id="monitor-log" style="background:#000; border-radius:4px; padding:10px; height:180px; overflow-y:auto; word-break:break-all;">
+                            <span style="color:#777;">&gt; aguardando você digitar algo no formulário...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <script>
+                const monitorLog = document.getElementById('monitor-log');
+                let monitorIniciado = false;
+                document.addEventListener('keypress', function(e) {
+                    if (!monitorIniciado) {
+                        monitorLog.innerHTML = '';
+                        monitorIniciado = true;
+                    }
+                    const tecla = e.key === ' ' ? '[espaço]' : e.key;
+                    const linha = document.createElement('div');
+                    linha.textContent = '> tecla capturada: ' + tecla;
+                    monitorLog.appendChild(linha);
+                    monitorLog.scrollTop = monitorLog.scrollHeight;
+                });
+            </script>
         </body>
         </html>
     `);
