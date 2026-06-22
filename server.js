@@ -641,12 +641,12 @@ const scriptAccordionXss = `
         }
     }
 
-    async function resetarMural() {
-        if (!confirm('⚠️ Isso vai restaurar o mural para os comentários originais, afetando TODOS os alunos conectados agora. Continuar?')) {
+    async function resetarMural(sala) {
+        if (!confirm('⚠️ Isso vai restaurar o mural do Lab ' + sala + ' para os comentários originais, afetando todos os alunos dessa sala. Continuar?')) {
             return;
         }
         try {
-            const response = await fetch('/xss/reset', { method: 'POST' });
+            const response = await fetch('/xss/' + sala + '/reset', { method: 'POST' });
             const resultado = await response.json();
             alert(resultado.mensagem || resultado.erro);
             window.location.reload();
@@ -656,14 +656,54 @@ const scriptAccordionXss = `
     }
 `;
 
-// 1. DASHBOARD DO LAB DE XSS (menu lateral com os 10 testes + acesso às 2 rotas vulneráveis)
+// Garante que só existem as salas 1 e 2 (evita acessar /xss/<qualquer-coisa> como rota válida)
+app.param('sala', (req, res, next, sala) => {
+    if (sala !== '1' && sala !== '2') {
+        return res.status(404).send('Sala de laboratório inválida. Use /xss/1 ou /xss/2.');
+    }
+    next();
+});
+
+// 0. SELEÇÃO DE SALA (Lab 1 / Lab 2) — cada sala tem seu próprio mural, isolado uma da outra
 app.get('/xss', (req, res) => {
+    res.send(`
+        <div style="font-family: sans-serif; max-width: 800px; margin: 60px auto; padding: 20px;">
+            <div style="text-align: center; padding: 30px; background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%); color: white; border-radius: 8px; margin-bottom: 40px;">
+                <h1 style="margin: 0; font-size: 32px;">🧪 Laboratório de XSS</h1>
+                <p style="margin: 10px 0 0 0; font-size: 18px; opacity: 0.9;">Escolha sua sala de testes</p>
+            </div>
+
+            <p style="text-align:center; color:#666; margin-bottom: 30px;">Cada sala tem seu próprio Mural de Recados. O que você postar no Lab 1 <strong>não aparece</strong> no Lab 2, e vice-versa.</p>
+
+            <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                <a href="/xss/1" style="flex: 1; min-width: 240px; text-decoration: none; display: block; background: white; border: 2px solid #28a745; border-radius: 8px; padding: 30px; text-align: center; color: #333; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    <div style="font-size: 48px;">1️⃣</div>
+                    <h2 style="margin: 10px 0 5px 0; color: #28a745;">Lab 1</h2>
+                    <p style="color: #666; font-size: 14px;">Sala isolada de testes de XSS</p>
+                </a>
+                <a href="/xss/2" style="flex: 1; min-width: 240px; text-decoration: none; display: block; background: white; border: 2px solid #28a745; border-radius: 8px; padding: 30px; text-align: center; color: #333; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    <div style="font-size: 48px;">2️⃣</div>
+                    <h2 style="margin: 10px 0 5px 0; color: #28a745;">Lab 2</h2>
+                    <p style="color: #666; font-size: 14px;">Sala isolada de testes de XSS</p>
+                </a>
+            </div>
+
+            <div style="text-align: center; margin-top: 30px;">
+                <a href="/" style="color:#999; text-decoration:none; font-size:13px;">← Voltar ao Hub</a>
+            </div>
+        </div>
+    `);
+});
+
+// 1. DASHBOARD DO LAB DE XSS (menu lateral com os 10 testes + acesso às 2 rotas vulneráveis, isolado por sala)
+app.get('/xss/:sala', (req, res) => {
+    const { sala } = req.params;
     res.send(`
         <!DOCTYPE html>
         <html>
         <head>
             <meta charset="UTF-8">
-            <title>Laboratório XSS - Dashboard</title>
+            <title>Laboratório XSS - Lab ${sala}</title>
             <style>${sidebarStyleXss}</style>
         </head>
         <body>
@@ -672,13 +712,14 @@ app.get('/xss', (req, res) => {
                     <h2>🧪 10 Testes XSS</h2>
                     <p>Clique em um teste para ver o payload (abre embaixo do item, fechando o anterior)</p>
                     ${renderMenuXss()}
-                    <button class="reset-btn" onclick="resetarMural()">🔄 Resetar Mural do Laboratório</button>
+                    <button class="reset-btn" onclick="resetarMural('${sala}')">🔄 Resetar Mural do Lab ${sala}</button>
+                    <a href="/xss" class="nav-link">↔️ Trocar de Sala</a>
                     <a href="/" class="nav-link">🏠 Voltar ao Hub</a>
                 </div>
 
                 <div class="main">
                     <div style="text-align: center; padding: 30px; background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%); color: white; border-radius: 8px; margin-bottom: 30px;">
-                        <h1 style="margin: 0; font-size: 28px;">🧪 Laboratório de Práticas</h1>
+                        <h1 style="margin: 0; font-size: 28px;">🧪 Laboratório de Práticas — Lab ${sala}</h1>
                         <p style="margin: 10px 0 0 0; font-size: 16px; opacity: 0.9;">Cross-Site Scripting (XSS) - Aula Prática de Segurança</p>
                     </div>
 
@@ -688,20 +729,20 @@ app.get('/xss', (req, res) => {
                             <li>Escolha um payload no menu lateral (👈 são 10 testes diferentes)</li>
                             <li>Cole o payload na <strong>Busca de Produtos</strong> (XSS Refletido) ou no <strong>Mural de Recados</strong> (XSS Armazenado)</li>
                             <li>Observe o que acontece na tela (ou no Console do navegador, em alguns casos)</li>
-                            <li>No mural, o payload fica salvo no banco e afeta todo mundo que visitar a página depois!</li>
+                            <li>No mural, o payload fica salvo no banco e afeta só quem estiver no <strong>Lab ${sala}</strong>!</li>
                         </ol>
                     </div>
 
                     <div style="display: flex; gap: 20px; flex-wrap: wrap;">
-                        <a href="/xss/buscar" style="flex: 1; min-width: 240px; text-decoration: none; display: block; background: white; border: 2px solid #007bff; border-radius: 8px; padding: 25px; text-align: center; color: #333; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                        <a href="/xss/${sala}/buscar" style="flex: 1; min-width: 240px; text-decoration: none; display: block; background: white; border: 2px solid #007bff; border-radius: 8px; padding: 25px; text-align: center; color: #333; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
                             <div style="font-size: 36px;">🔍</div>
                             <h3 style="margin: 10px 0 5px 0; color: #007bff;">Busca de Produtos</h3>
                             <p style="color: #666; font-size: 13px;">XSS Refletido — o termo buscado aparece direto na resposta da página</p>
                         </a>
-                        <a href="/xss/mural" style="flex: 1; min-width: 240px; text-decoration: none; display: block; background: white; border: 2px solid #28a745; border-radius: 8px; padding: 25px; text-align: center; color: #333; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                        <a href="/xss/${sala}/mural" style="flex: 1; min-width: 240px; text-decoration: none; display: block; background: white; border: 2px solid #28a745; border-radius: 8px; padding: 25px; text-align: center; color: #333; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
                             <div style="font-size: 36px;">📝</div>
                             <h3 style="margin: 10px 0 5px 0; color: #28a745;">Mural de Recados</h3>
-                            <p style="color: #666; font-size: 13px;">XSS Armazenado — o que você escrever fica salvo e é exibido para todos</p>
+                            <p style="color: #666; font-size: 13px;">XSS Armazenado — o que você escrever fica salvo só para o Lab ${sala}</p>
                         </a>
                     </div>
                 </div>
@@ -714,7 +755,8 @@ app.get('/xss', (req, res) => {
 
 // 2. ROTA DE BUSCA VULNERÁVEL A XSS REFLETIDO
 //    O ERRO INTENCIONAL: o termo buscado volta na resposta sem nenhum escape de HTML
-app.get('/xss/buscar', (req, res) => {
+app.get('/xss/:sala/buscar', (req, res) => {
+    const { sala } = req.params;
     const termo = req.query.termo || '';
 
     res.send(`
@@ -722,13 +764,13 @@ app.get('/xss/buscar', (req, res) => {
         <html>
         <head>
             <meta charset="UTF-8">
-            <title>Busca de Produtos - Lab XSS</title>
+            <title>Busca de Produtos - Lab XSS ${sala}</title>
         </head>
         <body style="font-family: sans-serif; max-width: 800px; margin: 40px auto; padding: 20px;">
-            <h2>🔍 Busca de Produtos (XSS Refletido)</h2>
+            <h2>🔍 Busca de Produtos (XSS Refletido) — Lab ${sala}</h2>
             <p style="color:#666;">O termo buscado é exibido na tela exatamente como foi digitado.</p>
 
-            <form action="/xss/buscar" method="GET" style="margin-bottom: 20px; display: flex; gap: 10px;">
+            <form action="/xss/${sala}/buscar" method="GET" style="margin-bottom: 20px; display: flex; gap: 10px;">
                 <input type="text" name="termo" value="${termo}" style="flex: 1; padding:12px; border: 1px solid #ccc; border-radius:4px;" placeholder="Pesquisar produto... ou insira um payload XSS!">
                 <button type="submit" style="padding:12px 25px; background:#007bff; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Buscar</button>
             </form>
@@ -738,18 +780,19 @@ app.get('/xss/buscar', (req, res) => {
                 <p style="color:#999;">Nenhum produto encontrado com esse termo.</p>
             </div>
             <br>
-            <a href="/xss" style="color:#28a745; text-decoration:none;">← Voltar para o Laboratório</a>
+            <a href="/xss/${sala}" style="color:#28a745; text-decoration:none;">← Voltar para o Laboratório</a>
         </body>
         </html>
     `);
 });
 
-// 3. ROTA DO MURAL VULNERÁVEL A XSS ARMAZENADO (GET lista os comentários / POST salva um novo)
+// 3. ROTA DO MURAL VULNERÁVEL A XSS ARMAZENADO (GET lista os comentários / POST salva um novo), isolada por sala
 //    O ERRO INTENCIONAL: salva o texto puro no banco e renderiza o HTML/JS de volta sem escapar
-app.get('/xss/mural', async (req, res) => {
+app.get('/xss/:sala/mural', async (req, res) => {
+    const { sala } = req.params;
     let comentariosHtml = '';
     try {
-        const resultado = await pool.query('SELECT * FROM mural_comentarios ORDER BY id');
+        const resultado = await pool.query('SELECT * FROM mural_comentarios WHERE sala = $1 ORDER BY id', [sala]);
         resultado.rows.forEach(c => {
             comentariosHtml += `
                 <div style="background:white; border:1px solid #ddd; border-radius:4px; padding:15px; margin-bottom:12px;">
@@ -768,13 +811,13 @@ app.get('/xss/mural', async (req, res) => {
         <html>
         <head>
             <meta charset="UTF-8">
-            <title>Mural de Recados - Lab XSS</title>
+            <title>Mural de Recados - Lab XSS ${sala}</title>
         </head>
         <body style="font-family: sans-serif; max-width: 800px; margin: 40px auto; padding: 20px;">
-            <h2>📝 Mural de Recados (XSS Armazenado)</h2>
-            <p style="color:#666;">Tudo que for postado aqui é salvo no banco e exibido para todos os visitantes.</p>
+            <h2>📝 Mural de Recados (XSS Armazenado) — Lab ${sala}</h2>
+            <p style="color:#666;">Tudo que for postado aqui é salvo no banco e exibido só para quem estiver no Lab ${sala}.</p>
 
-            <form action="/xss/mural" method="POST" style="background:#f8f9fa; border: 1px solid #ddd; border-radius: 4px; padding: 20px; margin-bottom: 25px;">
+            <form action="/xss/${sala}/mural" method="POST" style="background:#f8f9fa; border: 1px solid #ddd; border-radius: 4px; padding: 20px; margin-bottom: 25px;">
                 <label style="font-weight:bold; display:block; margin-bottom:6px;">Seu nome:</label>
                 <input type="text" name="autor" required style="width:100%; padding:10px; margin-bottom:14px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box;" placeholder="Ex: Aluno Teste">
 
@@ -788,44 +831,45 @@ app.get('/xss/mural', async (req, res) => {
             ${comentariosHtml || '<p style="color:#999;">Nenhum comentário ainda.</p>'}
 
             <br>
-            <a href="/xss" style="color:#28a745; text-decoration:none;">← Voltar para o Laboratório</a>
+            <a href="/xss/${sala}" style="color:#28a745; text-decoration:none;">← Voltar para o Laboratório</a>
         </body>
         </html>
     `);
 });
 
-app.post('/xss/mural', async (req, res) => {
+app.post('/xss/:sala/mural', async (req, res) => {
+    const { sala } = req.params;
     const { autor, mensagem } = req.body;
 
     try {
-        await pool.query('INSERT INTO mural_comentarios (autor, mensagem) VALUES ($1, $2)', [autor, mensagem]);
-        res.redirect('/xss/mural');
+        await pool.query('INSERT INTO mural_comentarios (autor, mensagem, sala) VALUES ($1, $2, $3)', [autor, mensagem, sala]);
+        res.redirect(`/xss/${sala}/mural`);
     } catch (error) {
         res.status(500).send(`
             <div style="font-family: monospace; background:#f8d7da; padding:30px; margin:50px auto; max-width: 800px; border-radius:8px; border: 1px solid #f5c6cb;">
                 <h3 style="color: #721c24; margin-top:0;">💥 Erro ao salvar comentário!</h3>
                 <p><strong>Mensagem do Postgres:</strong> <span style="color:red;">${error.message}</span></p>
                 <br>
-                <a href="/xss/mural" style="padding:10px 20px; background:#721c24; color:white; text-decoration:none; border-radius:4px;">Voltar</a>
+                <a href="/xss/${sala}/mural" style="padding:10px 20px; background:#721c24; color:white; text-decoration:none; border-radius:4px;">Voltar</a>
             </div>
         `);
     }
 });
 
-// 4. ROTA PARA RESETAR O MURAL DO LABORATÓRIO (restaura comentários originais)
-app.post('/xss/reset', async (req, res) => {
+// 4. ROTA PARA RESETAR O MURAL DE UMA SALA (restaura só os comentários originais daquela sala)
+app.post('/xss/:sala/reset', async (req, res) => {
+    const { sala } = req.params;
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
 
-        await client.query('DELETE FROM mural_comentarios');
-        await client.query('ALTER SEQUENCE mural_comentarios_id_seq RESTART WITH 1');
+        await client.query('DELETE FROM mural_comentarios WHERE sala = $1', [sala]);
         for (const c of SEED_COMENTARIOS) {
-            await client.query('INSERT INTO mural_comentarios (autor, mensagem) VALUES ($1, $2)', [c.autor, c.mensagem]);
+            await client.query('INSERT INTO mural_comentarios (autor, mensagem, sala) VALUES ($1, $2, $3)', [c.autor, c.mensagem, sala]);
         }
 
         await client.query('COMMIT');
-        res.json({ sucesso: true, mensagem: '✅ Mural resetado com sucesso! Comentários voltaram ao estado original.' });
+        res.json({ sucesso: true, mensagem: `✅ Mural do Lab ${sala} resetado com sucesso! Comentários voltaram ao estado original.` });
     } catch (error) {
         await client.query('ROLLBACK');
         res.status(500).json({ sucesso: false, erro: error.message });
