@@ -1215,20 +1215,7 @@ const scriptAccordionIdor = `
         }
     }
 
-    function chaveProgressoIdor(sala) { return 'idor_progresso_lab' + sala; }
-
-    function carregarProgressoIdor(sala) {
-        try { return JSON.parse(localStorage.getItem(chaveProgressoIdor(sala))) || {}; }
-        catch (e) { return {}; }
-    }
-
-    function salvarProgressoIdor(sala, progresso) {
-        localStorage.setItem(chaveProgressoIdor(sala), JSON.stringify(progresso));
-    }
-
-    function atualizarContadorIdor(sala) {
-        const progresso = carregarProgressoIdor(sala);
-        const total = Object.keys(progresso).filter(function(k) { return progresso[k]; }).length;
+    function atualizarContadorIdor(total) {
         const contador = document.getElementById('contador-progresso');
         if (contador) contador.textContent = total + ' / 10 concluídos';
     }
@@ -1240,12 +1227,27 @@ const scriptAccordionIdor = `
         if (titulo && titulo.textContent.indexOf('✅') === -1) titulo.textContent = '✅ ' + titulo.textContent;
     }
 
-    function aplicarProgressoSalvoIdor(sala) {
-        const progresso = carregarProgressoIdor(sala);
-        Object.keys(progresso).forEach(function(id) {
-            if (progresso[id]) marcarConcluidoIdor(id);
+    function desmarcarTodosIdor() {
+        document.querySelectorAll('.teste-link.concluido').forEach(function(link) {
+            link.classList.remove('concluido');
         });
-        atualizarContadorIdor(sala);
+        document.querySelectorAll('[id^="titulo-idor"]').forEach(function(titulo) {
+            titulo.textContent = titulo.textContent.replace('✅ ', '');
+        });
+    }
+
+    // Busca no servidor (tabela idor_progresso) quais exercícios já foram concluídos —
+    // o navegador não guarda mais nada disso, então o estado é sempre o que está no banco.
+    async function carregarProgressoDoServidorIdor(sala) {
+        try {
+            const response = await fetch('/idor/' + sala + '/progresso');
+            const resultado = await response.json();
+            desmarcarTodosIdor();
+            (resultado.concluidos || []).forEach(marcarConcluidoIdor);
+            atualizarContadorIdor((resultado.concluidos || []).length);
+        } catch (err) {
+            console.error('Erro ao carregar progresso:', err.message);
+        }
     }
 
     async function validarTesteIdor(id) {
@@ -1263,11 +1265,7 @@ const scriptAccordionIdor = `
             if (resultado.correto) {
                 feedback.textContent = '✅ Correto! Exercício concluído.';
                 feedback.style.color = '#28a745';
-                marcarConcluidoIdor(id);
-                const progresso = carregarProgressoIdor(sala);
-                progresso[id] = true;
-                salvarProgressoIdor(sala, progresso);
-                atualizarContadorIdor(sala);
+                await carregarProgressoDoServidorIdor(sala);
             } else {
                 feedback.textContent = '❌ Ainda não é isso. Revise os passos do ataque e tente de novo.';
                 feedback.style.color = '#dc3545';
@@ -1279,7 +1277,7 @@ const scriptAccordionIdor = `
     }
 
     async function resetarIdor(sala) {
-        if (!confirm('⚠️ Isso vai restaurar todos os dados do Lab ' + sala + ' de IDOR (perfis, comprovantes, faturas, pedidos, chamados e mensagens) para o estado original. O progresso marcado neste navegador não é apagado. Continuar?')) {
+        if (!confirm('⚠️ Isso vai restaurar todos os dados do Lab ' + sala + ' de IDOR (perfis, comprovantes, faturas, pedidos, chamados e mensagens) E o progresso dos 10 exercícios para o estado original. Continuar?')) {
             return;
         }
         try {
@@ -1542,7 +1540,7 @@ app.get('/idor/:sala', exigirLoginIdor, (req, res) => {
             <script>
                 window.SALA_ATUAL = '${sala}';
                 ${scriptAccordionIdor}
-                aplicarProgressoSalvoIdor('${sala}');
+                carregarProgressoDoServidorIdor('${sala}');
             </script>
         </body>
         </html>
@@ -1913,6 +1911,18 @@ app.get('/idor/:sala/mensagem/:numero', async (req, res) => {
     }
 });
 
+// 10.5 PROGRESSO DA SALA — o dashboard consulta isto ao carregar a página em vez de usar
+//      localStorage, para que o ✅ exibido seja sempre o que está gravado no banco.
+app.get('/idor/:sala/progresso', async (req, res) => {
+    const { sala } = req.params;
+    try {
+        const r = await pool.query('SELECT teste_id FROM idor_progresso WHERE sala=$1', [sala]);
+        res.json({ concluidos: r.rows.map(row => row.teste_id) });
+    } catch (error) {
+        res.status(500).json({ concluidos: [], erro: error.message });
+    }
+});
+
 // 11. VALIDAÇÃO DAS RESPOSTAS — compara o que o aluno encontrou com o valor correto guardado no servidor
 //     e, se acertou, registra a conclusão no banco (idor_progresso) para o painel do professor ver.
 app.post('/idor/:sala/validar', async (req, res) => {
@@ -1977,8 +1987,12 @@ app.post('/idor/:sala/reset', async (req, res) => {
             await client.query('INSERT INTO idor_mensagens (sala, numero, perfil_numero, conteudo) VALUES ($1,$2,$3,$4)', [sala, m.numero, m.perfil_numero, m.conteudo]);
         }
 
+        // O reset de dados também zera o progresso: depois de restaurar tudo, os exercícios
+        // marcados como concluídos não fariam mais sentido (a "prova" do ataque desapareceu).
+        await client.query('DELETE FROM idor_progresso WHERE sala=$1', [sala]);
+
         await client.query('COMMIT');
-        res.json({ sucesso: true, mensagem: `✅ Dados do Lab ${sala} de IDOR resetados com sucesso!` });
+        res.json({ sucesso: true, mensagem: `✅ Dados e progresso do Lab ${sala} de IDOR resetados com sucesso!` });
     } catch (error) {
         await client.query('ROLLBACK');
         res.status(500).json({ sucesso: false, erro: error.message });
