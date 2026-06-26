@@ -94,6 +94,11 @@ app.get('/', (req, res) => {
                     <h2 style="margin: 10px 0 5px 0; color: #28a745;">Cross-Site Scripting (XSS)</h2>
                     <p style="color: #666; font-size: 14px;">XSS Refletido na busca e XSS Armazenado no mural de comentários.</p>
                 </a>
+                <a href="/idor" style="flex: 1; min-width: 280px; text-decoration: none; display: block; background: white; border: 2px solid #fd7e14; border-radius: 8px; padding: 30px; text-align: center; color: #333; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: transform 0.2s;">
+                    <div style="font-size: 48px;">🔓</div>
+                    <h2 style="margin: 10px 0 5px 0; color: #fd7e14;">IDOR / Controle de Acesso</h2>
+                    <p style="color: #666; font-size: 14px;">Manipulação de IDs, escalonamento de privilégio e 10 falhas de autorização.</p>
+                </a>
             </div>
 
             <div style="text-align: center; margin-top: 30px; color: #999; font-size: 12px;">
@@ -921,6 +926,834 @@ app.post('/xss/:sala/reset', async (req, res) => {
 
         await client.query('COMMIT');
         res.json({ sucesso: true, mensagem: `✅ Mural do Lab ${sala} e catálogo de produtos resetados com sucesso! Tudo voltou ao estado original.` });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ sucesso: false, erro: error.message });
+    } finally {
+        client.release();
+    }
+});
+
+// ============================================================
+// LABORATÓRIO DE IDOR / QUEBRA DE CONTROLE DE ACESSO
+// ============================================================
+
+const SEED_IDOR_PERFIS = [
+    { numero: 1, nome: 'Você (Aluno QA)', email: 'aluno@lab.com', telefone: '(11) 90000-0001', cargo: 'Estagiário(a) de QA', salario: 1800.00, cpf: '000.000.000-00', bio: 'Aprendendo sobre segurança ofensiva', papel: 'aluno', token: null },
+    { numero: 2, nome: 'Marina Silva', email: 'marina.silva@empresa-lab.com', telefone: '(11) 98877-6655', cargo: 'Gerente Financeira', salario: 12300.00, cpf: '111.222.333-44', bio: 'Adoro café e planilhas de Excel', papel: 'aluno', token: null },
+    { numero: 3, nome: 'Carlos Mendes', email: 'carlos.mendes@empresa-lab.com', telefone: '(11) 97766-5544', cargo: 'Diretor de TI', salario: 18750.00, cpf: '123.456.789-00', bio: '30 anos de carreira em tecnologia', papel: 'aluno', token: 'TKN-CM-58231' },
+    { numero: 4, nome: 'Beatriz Souza', email: 'beatriz.souza@empresa-lab.com', telefone: '(11) 96655-4433', cargo: 'Analista de Compras', salario: 5200.00, cpf: '222.333.444-55', bio: 'Apaixonada por logística', papel: 'aluno', token: null },
+    { numero: 5, nome: 'Roberto Alves', email: 'roberto.alves@empresa-lab.com', telefone: '(11) 95544-3322', cargo: 'Sócio-Diretor', salario: 42000.00, cpf: '333.444.555-66', bio: 'Fundador da empresa', papel: 'aluno', token: null }
+];
+
+const SEED_IDOR_COMPROVANTES = [
+    { numero: 1001, perfil_numero: 1, valor: 1800.00, descricao: 'Pagamento de bolsa-auxílio mensal' },
+    { numero: 1002, perfil_numero: 2, valor: 4750.00, descricao: 'Pagamento de comissão sobre vendas do trimestre' }
+];
+
+const SEED_IDOR_FATURAS = [
+    { numero: 2001, perfil_numero: 1, valor: 49.90, descricao: 'Assinatura Mensal Básica' },
+    { numero: 2002, perfil_numero: 4, valor: 899.90, descricao: 'Assinatura Anual Premium' }
+];
+
+const SEED_IDOR_PEDIDOS = [
+    { numero: 3001, perfil_numero: 1, item: 'Curso Online de Introdução à Cibersegurança', valor: 197.00 },
+    { numero: 3002, perfil_numero: 5, item: 'Backup Completo do Banco de Dados Pessoal', valor: 1200.00 }
+];
+
+const SEED_IDOR_CHAMADOS = [
+    { numero: 4001, perfil_numero: 1, assunto: 'Dúvida sobre meu boleto', mensagem: 'Olá, gostaria de saber o vencimento do meu boleto deste mês.' },
+    { numero: 4002, perfil_numero: 2, assunto: 'Esqueci minha senha de administrador, me ajudem urgente', mensagem: 'Pessoal, preciso redefinir a senha mestre do sistema financeiro hoje ainda, é urgente.' }
+];
+
+const SEED_IDOR_MENSAGENS = [
+    { numero: 5001, perfil_numero: 1, conteudo: 'Olá! Este é o seu canal privado com o suporte. Em que podemos ajudar?' },
+    { numero: 5002, perfil_numero: 3, conteudo: 'Carlos, segue seu código de recuperação de acesso: 884215. Não compartilhe com ninguém.' }
+];
+
+// As 10 lições do laboratório de IDOR — cada uma explica o que o aluno faz normalmente,
+// qual é a ação do ataque (manipulação) e a lição de segurança, seguindo o mesmo formato
+// usado nas aulas: "O que o aluno faz" / "Ação do ataque" / "Lição".
+const testesIdor = [
+    {
+        id: 'idor1',
+        nome: '1️⃣ Manipulação de ID Sequencial (O Clássico)',
+        oQueAlunoFaz: 'Você está logado e acessa o seu próprio comprovante de pagamento em /idor/SALA/comprovante/1001.',
+        acaoDoAtaque: 'Troque o número na URL para 1002 e veja o comprovante de outra pessoa, que não deveria estar visível para você.',
+        licao: 'IDs numéricos sequenciais e previsíveis facilitam a raspagem de dados (data scraping): basta ir somando 1 ao número para varrer os registros de todo mundo.',
+        pergunta: 'Qual é a descrição (motivo do pagamento) que aparece no comprovante 1002?'
+    },
+    {
+        id: 'idor2',
+        nome: '2️⃣ Exposição de Dados Sigilosos no Perfil',
+        oQueAlunoFaz: 'Acesse seu próprio perfil em /idor/SALA/perfil/1 e observe os campos sigilosos exibidos (telefone, CPF, salário).',
+        acaoDoAtaque: 'Troque o número para 2 (perfil de Marina Silva) e veja que os mesmos dados sigilosos de outra pessoa aparecem, sem nenhuma verificação de que ela autorizou isso.',
+        licao: 'Exibir dados sensíveis de qualquer registro sem checar se ele pertence ao usuário logado é uma quebra de controle de acesso horizontal — o tipo mais comum de IDOR.',
+        pergunta: 'Qual é o telefone que aparece no perfil de Marina Silva (perfil 2)?'
+    },
+    {
+        id: 'idor3',
+        nome: '3️⃣ IDOR de Escrita (Alterando Dados de Outra Pessoa)',
+        oQueAlunoFaz: 'Acesse /idor/SALA/perfil/1/editar e altere sua própria bio normalmente, para entender como o formulário funciona.',
+        acaoDoAtaque: 'Troque o número na URL para /idor/SALA/perfil/2/editar (perfil de Marina) e altere a bio dela para exatamente esta frase: "Perfil comprometido via falha de IDOR". Depois acesse /idor/SALA/perfil/2 para confirmar que a alteração foi salva.',
+        licao: 'IDOR não serve só para ler dados de outras pessoas — quando a operação é de escrita, o impacto é ainda maior: você está alterando informação de quem não tem nenhuma relação com a sua conta.',
+        pergunta: 'Depois de editar, qual frase aparece agora no campo Bio do perfil de Marina (perfil 2)?'
+    },
+    {
+        id: 'idor4',
+        nome: '4️⃣ Controle de Acesso Vertical Quebrado (Forced Browsing)',
+        oQueAlunoFaz: 'Navegue pelo laboratório normalmente — repare que não existe nenhum link de menu para uma área administrativa.',
+        acaoDoAtaque: 'Mesmo assim, digite diretamente o endereço /idor/SALA/admin/usuarios na barra do navegador. Você, um "aluno" comum, consegue ver uma lista administrativa com o CPF de todo mundo, sem que o sistema pergunte se você tem permissão.',
+        licao: 'Esconder um link do menu não é controle de acesso. Se a rota nunca verifica o papel de quem está pedindo, qualquer pessoa que descubra ou adivinhe a URL entra — isso é "Forced Browsing", falta de controle de acesso em nível de função.',
+        pergunta: 'Qual é o CPF de Carlos Mendes que aparece nessa lista administrativa?'
+    },
+    {
+        id: 'idor5',
+        nome: '5️⃣ Escalonamento de Privilégio via Campo Oculto',
+        oQueAlunoFaz: 'Acesse /idor/SALA/conta para ver seu cargo atual ("Aluno") e o aviso de que o conteúdo de administrador está bloqueado. Depois acesse /idor/SALA/conta/editar para ver o formulário de edição.',
+        acaoDoAtaque: 'Use o "Inspecionar Elemento" do navegador (botão direito → Inspecionar) para encontrar um campo escondido chamado papel no formulário. Mude o valor dele de "aluno" para "admin" direto no HTML e clique em Salvar. Depois volte para /idor/SALA/conta.',
+        licao: 'Campos escondidos (hidden inputs) não são seguros — eles só não aparecem na tela, mas qualquer pessoa pode editá-los antes de enviar o formulário. Confiar nesse valor para decidir permissões é chamado de "mass assignment" e permite que o próprio usuário se promova a administrador.',
+        pergunta: 'Qual é a senha do cofre de administradores revelada na sua conta depois da escalada de privilégio?'
+    },
+    {
+        id: 'idor6',
+        nome: '6️⃣ IDOR em API (Raspagem de Dados via JSON)',
+        oQueAlunoFaz: 'Acesse a API /idor/SALA/api/perfil/1 direto no navegador e veja que ela devolve um JSON com seus próprios dados, incluindo um campo token.',
+        acaoDoAtaque: 'Troque o número na URL para /idor/SALA/api/perfil/3 (Carlos Mendes) e veja o token dele aparecer no JSON, do mesmo jeito.',
+        licao: 'APIs sofrem do mesmo problema que páginas HTML — e às vezes passam batido em testes porque "não é uma tela". Se o endpoint não confere quem está pedindo o recurso, um script simples consegue varrer os dados de todos os IDs em poucos segundos.',
+        pergunta: 'Qual é o token que aparece no JSON do perfil 3 (Carlos Mendes)?'
+    },
+    {
+        id: 'idor7',
+        nome: '7️⃣ ID "Escondido" em Base64 (Ofuscação não é Proteção)',
+        oQueAlunoFaz: 'Acesse sua fatura em /idor/SALA/fatura/MjAwMQ== e note que o número não aparece "limpo" na URL — ele está em Base64 (MjAwMQ== é o código 2001).',
+        acaoDoAtaque: 'Decodifique o código (existem decodificadores de Base64 gratuitos online, ou o Console do navegador com atob("MjAwMQ==")), some 1 ao número (2002), gere o novo código em Base64 e cole na URL no lugar do antigo.',
+        licao: 'Disfarçar um ID em Base64, hexadecimal ou qualquer outra codificação não é criptografia — é só uma transformação reversível em segundos. Se a única proteção for "esconder" o formato do ID, ela não é proteção nenhuma.',
+        pergunta: 'Qual é a descrição da fatura que você encontrou ao acessar o ID 2002 codificado?'
+    },
+    {
+        id: 'idor8',
+        nome: '8️⃣ IDOR em Exclusão (Apagando Dados de Outra Pessoa)',
+        oQueAlunoFaz: 'Acesse /idor/SALA/chamados para ver a lista dos SEUS chamados de suporte (só o seu, #4001).',
+        acaoDoAtaque: 'Acesse diretamente /idor/SALA/chamado/4002 (um número que não está na sua lista) para ler o chamado de outra pessoa, e depois clique em "Excluir Chamado" — confirmando que conseguiu apagar um registro que não é seu.',
+        licao: 'O impacto de um IDOR depende do verbo da operação: leitura já é grave, mas exclusão ou alteração sem checagem de propriedade pode causar perda de dados real para outras pessoas, de forma irreversível.',
+        pergunta: 'Qual era o assunto do chamado #4002 antes de você excluí-lo?'
+    },
+    {
+        id: 'idor9',
+        nome: '9️⃣ IDOR via Parâmetro na Query String',
+        oQueAlunoFaz: 'Acesse /idor/SALA/pedidos para ver seu próprio histórico de pedidos. Note que a URL na verdade é /idor/SALA/pedidos?usuario_numero=1.',
+        acaoDoAtaque: 'Troque o valor de usuario_numero na URL para 5 (Roberto Alves) e veja o histórico de pedidos dele, uma pessoa completamente diferente de você.',
+        licao: 'IDOR não acontece só na URL "bonita" (/recurso/123) — qualquer lugar onde um ID circula sem ser checado é um vetor: parâmetros de query string, corpo de formulário, cabeçalhos e até cookies podem ser manipulados do mesmo jeito.',
+        pergunta: 'Qual item aparece no histórico de pedidos de Roberto Alves (perfil 5)?'
+    },
+    {
+        id: 'idor10',
+        nome: '🔟 IDOR em Mensagens Privadas',
+        oQueAlunoFaz: 'Acesse sua própria conversa privada com o suporte em /idor/SALA/mensagem/5001.',
+        acaoDoAtaque: 'Troque o número para /idor/SALA/mensagem/5002 e leia uma conversa privada que pertence a outra pessoa (Carlos Mendes), incluindo uma informação que deveria ser secreta.',
+        licao: 'Conversas privadas são alvos especialmente sensíveis para IDOR, porque costumam conter dados que as empresas tratam como confidenciais (senhas, códigos de verificação) — e o atacante nem precisa ser sofisticado, só trocar um número na URL.',
+        pergunta: 'Qual é o código de recuperação de acesso mencionado na conversa privada de Carlos Mendes?'
+    }
+];
+
+// Respostas corretas de cada desafio — nunca são enviadas ao navegador, só comparadas no servidor
+const RESPOSTAS_IDOR = {
+    idor1: 'Pagamento de comissão sobre vendas do trimestre',
+    idor2: '(11) 98877-6655',
+    idor3: 'Perfil comprometido via falha de IDOR',
+    idor4: '123.456.789-00',
+    idor5: 'SENHA-MASTER-2024',
+    idor6: 'TKN-CM-58231',
+    idor7: 'Assinatura Anual Premium',
+    idor8: 'Esqueci minha senha de administrador, me ajudem urgente',
+    idor9: 'Backup Completo do Banco de Dados Pessoal',
+    idor10: '884215'
+};
+
+// Compara respostas ignorando acentos, maiúsculas/minúsculas e qualquer pontuação/espaçamento,
+// para não reprovar o aluno por ter copiado o texto com uma formatação levemente diferente.
+function normalizarRespostaIdor(s) {
+    return String(s || '')
+        .normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '');
+}
+
+function renderMenuIdor() {
+    let menu = '';
+    testesIdor.forEach(teste => {
+        menu += `
+            <div class="teste-item">
+                <a href="javascript:void(0)" class="teste-link" id="link-${teste.id}" onclick="toggleTesteIdor('${teste.id}')">
+                    <strong style="font-size:13px;" id="titulo-${teste.id}">${escapeHtml(teste.nome)}</strong>
+                </a>
+                <div class="teste-panel" id="panel-${teste.id}">
+                    <p style="margin:6px 0; color:#333; font-size:12px;"><strong>📍 O que o aluno faz:</strong> ${escapeHtml(teste.oQueAlunoFaz)}</p>
+                    <p style="margin:6px 0; color:#a14e00; font-size:12px;"><strong>⚔️ Ação do ataque:</strong> ${escapeHtml(teste.acaoDoAtaque)}</p>
+                    <p style="margin:6px 0; color:#155724; font-size:12px;"><strong>🎓 Lição:</strong> ${escapeHtml(teste.licao)}</p>
+                    <div style="background:white; border:1px solid #fd7e14; border-radius:4px; padding:10px; margin-top:10px;">
+                        <p style="margin:0 0 6px 0; font-size:12px; font-weight:bold; color:#333;">${escapeHtml(teste.pergunta)}</p>
+                        <input type="text" id="resposta-${teste.id}" placeholder="Cole aqui a resposta encontrada..." style="width:100%; padding:8px; margin-bottom:8px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box; font-size:12px;">
+                        <button onclick="validarTesteIdor('${teste.id}')" style="width:100%; padding:8px; background:#fd7e14; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer; font-size:12px;">✅ Validar Resposta</button>
+                        <p id="feedback-${teste.id}" style="margin:8px 0 0 0; font-size:11px;"></p>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    return menu;
+}
+
+const sidebarStyleIdor = `
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: sans-serif; background: white; }
+    .container { display: flex; min-height: 100vh; }
+    .sidebar { width: 340px; background: #f5f5f5; padding: 20px; overflow-y: auto; border-right: 2px solid #ddd; }
+    .main { flex: 1; padding: 30px; overflow-y: auto; background: white; }
+    .sidebar h2 { margin-top: 0; margin-bottom: 6px; color: #333; font-size: 16px; }
+    .sidebar p { font-size: 12px; color: #666; margin-bottom: 15px; }
+    .teste-item { margin: 8px 0; }
+    .teste-link { display:block; padding:12px; border-radius:4px; text-decoration:none; background:#f9f9f9; border:1px solid #ddd; color:#333; cursor:pointer; transition:all 0.2s; }
+    .teste-link.active { background:#fd7e14; color:white; border:2px solid #c1590a; }
+    .teste-link.concluido { border-left: 4px solid #28a745; }
+    .teste-panel { display:none; background:#fff3e6; padding:12px; border-radius:4px; margin-top:6px; border-left:4px solid #fd7e14; }
+    .teste-panel.open { display:block; }
+    .reset-btn { display:block; width:100%; text-align:center; padding:12px; background:#6c757d; color:white; border:none; border-radius:4px; margin-top:20px; font-weight:bold; cursor:pointer; font-size:13px; }
+    .nav-link { display:block; text-align:center; padding:10px; background:#6c757d; color:white; text-decoration:none; border-radius:4px; margin-top:10px; font-size: 13px; }
+`;
+
+const scriptAccordionIdor = `
+    let testeAbertoIdor = null;
+    function toggleTesteIdor(id) {
+        const painelNovo = document.getElementById('panel-' + id);
+        const linkNovo = document.getElementById('link-' + id);
+        const reabrindoMesmo = testeAbertoIdor === id;
+
+        if (testeAbertoIdor) {
+            document.getElementById('panel-' + testeAbertoIdor).classList.remove('open');
+            document.getElementById('link-' + testeAbertoIdor).classList.remove('active');
+        }
+
+        if (reabrindoMesmo) {
+            testeAbertoIdor = null;
+        } else {
+            painelNovo.classList.add('open');
+            linkNovo.classList.add('active');
+            testeAbertoIdor = id;
+        }
+    }
+
+    function chaveProgressoIdor(sala) { return 'idor_progresso_lab' + sala; }
+
+    function carregarProgressoIdor(sala) {
+        try { return JSON.parse(localStorage.getItem(chaveProgressoIdor(sala))) || {}; }
+        catch (e) { return {}; }
+    }
+
+    function salvarProgressoIdor(sala, progresso) {
+        localStorage.setItem(chaveProgressoIdor(sala), JSON.stringify(progresso));
+    }
+
+    function atualizarContadorIdor(sala) {
+        const progresso = carregarProgressoIdor(sala);
+        const total = Object.keys(progresso).filter(function(k) { return progresso[k]; }).length;
+        const contador = document.getElementById('contador-progresso');
+        if (contador) contador.textContent = total + ' / 10 concluídos';
+    }
+
+    function marcarConcluidoIdor(id) {
+        const link = document.getElementById('link-' + id);
+        const titulo = document.getElementById('titulo-' + id);
+        if (link) link.classList.add('concluido');
+        if (titulo && titulo.textContent.indexOf('✅') === -1) titulo.textContent = '✅ ' + titulo.textContent;
+    }
+
+    function aplicarProgressoSalvoIdor(sala) {
+        const progresso = carregarProgressoIdor(sala);
+        Object.keys(progresso).forEach(function(id) {
+            if (progresso[id]) marcarConcluidoIdor(id);
+        });
+        atualizarContadorIdor(sala);
+    }
+
+    async function validarTesteIdor(id) {
+        const sala = window.SALA_ATUAL;
+        const input = document.getElementById('resposta-' + id);
+        const feedback = document.getElementById('feedback-' + id);
+        const resposta = input.value;
+        try {
+            const response = await fetch('/idor/' + sala + '/validar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ testeId: id, resposta: resposta })
+            });
+            const resultado = await response.json();
+            if (resultado.correto) {
+                feedback.textContent = '✅ Correto! Exercício concluído.';
+                feedback.style.color = '#28a745';
+                marcarConcluidoIdor(id);
+                const progresso = carregarProgressoIdor(sala);
+                progresso[id] = true;
+                salvarProgressoIdor(sala, progresso);
+                atualizarContadorIdor(sala);
+            } else {
+                feedback.textContent = '❌ Ainda não é isso. Revise os passos do ataque e tente de novo.';
+                feedback.style.color = '#dc3545';
+            }
+        } catch (err) {
+            feedback.textContent = '❌ Erro ao validar: ' + err.message;
+            feedback.style.color = '#dc3545';
+        }
+    }
+
+    async function resetarIdor(sala) {
+        if (!confirm('⚠️ Isso vai restaurar todos os dados do Lab ' + sala + ' de IDOR (perfis, comprovantes, faturas, pedidos, chamados e mensagens) para o estado original. O progresso marcado neste navegador não é apagado. Continuar?')) {
+            return;
+        }
+        try {
+            const response = await fetch('/idor/' + sala + '/reset', { method: 'POST' });
+            const resultado = await response.json();
+            alert(resultado.mensagem || resultado.erro);
+            window.location.reload();
+        } catch (err) {
+            alert('❌ Erro ao resetar: ' + err.message);
+        }
+    }
+`;
+
+// Envolve o conteúdo de cada tela do lab de IDOR no mesmo layout simples (igual às telas de XSS)
+function paginaIdor(sala, titulo, conteudoHtml) {
+    return `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>${escapeHtml(titulo)} - Lab IDOR ${sala}</title>
+        </head>
+        <body style="font-family: sans-serif; max-width: 800px; margin: 40px auto; padding: 20px;">
+            ${conteudoHtml}
+            <br>
+            <a href="/idor/${sala}" style="color:#fd7e14; text-decoration:none;">← Voltar para o Laboratório</a>
+        </body>
+        </html>
+    `;
+}
+
+// 0. SELEÇÃO DE SALA (Lab 1 / Lab 2) — mesmo padrão de isolamento usado no lab de XSS
+app.get('/idor', (req, res) => {
+    res.send(`
+        <div style="font-family: sans-serif; max-width: 800px; margin: 60px auto; padding: 20px;">
+            <div style="text-align: center; padding: 30px; background: linear-gradient(135deg, #fd7e14 0%, #c1590a 100%); color: white; border-radius: 8px; margin-bottom: 40px;">
+                <h1 style="margin: 0; font-size: 32px;">🔓 Laboratório de IDOR</h1>
+                <p style="margin: 10px 0 0 0; font-size: 18px; opacity: 0.9;">Escolha sua sala de testes</p>
+            </div>
+
+            <p style="text-align:center; color:#666; margin-bottom: 30px;">Cada sala tem seus próprios dados (perfis, comprovantes, chamados etc). O que você alterar no Lab 1 <strong>não afeta</strong> o Lab 2, e vice-versa.</p>
+
+            <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                <a href="/idor/1" style="flex: 1; min-width: 240px; text-decoration: none; display: block; background: white; border: 2px solid #fd7e14; border-radius: 8px; padding: 30px; text-align: center; color: #333; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    <div style="font-size: 48px;">1️⃣</div>
+                    <h2 style="margin: 10px 0 5px 0; color: #fd7e14;">Lab 1</h2>
+                    <p style="color: #666; font-size: 14px;">Sala isolada de testes de IDOR</p>
+                </a>
+                <a href="/idor/2" style="flex: 1; min-width: 240px; text-decoration: none; display: block; background: white; border: 2px solid #fd7e14; border-radius: 8px; padding: 30px; text-align: center; color: #333; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    <div style="font-size: 48px;">2️⃣</div>
+                    <h2 style="margin: 10px 0 5px 0; color: #fd7e14;">Lab 2</h2>
+                    <p style="color: #666; font-size: 14px;">Sala isolada de testes de IDOR</p>
+                </a>
+            </div>
+
+            <div style="text-align: center; margin-top: 30px;">
+                <a href="/" style="color:#999; text-decoration:none; font-size:13px;">← Voltar ao Hub</a>
+            </div>
+        </div>
+    `);
+});
+
+// 1. DASHBOARD DO LAB DE IDOR (menu lateral com os 10 testes + atalhos para as telas "normais")
+app.get('/idor/:sala', (req, res) => {
+    const { sala } = req.params;
+    res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Laboratório IDOR - Lab ${sala}</title>
+            <style>${sidebarStyleIdor}</style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="sidebar">
+                    <h2>🔓 10 Testes de IDOR</h2>
+                    <p id="contador-progresso" style="font-weight:bold; color:#fd7e14;">0 / 10 concluídos</p>
+                    <p>Clique em um teste para ver o passo a passo do ataque e responder o desafio.</p>
+                    ${renderMenuIdor()}
+                    <button class="reset-btn" onclick="resetarIdor('${sala}')">🔄 Resetar Dados do Lab ${sala}</button>
+                    <a href="/idor" class="nav-link">↔️ Trocar de Sala</a>
+                    <a href="/" class="nav-link">🏠 Voltar ao Hub</a>
+                </div>
+
+                <div class="main">
+                    <div style="text-align: center; padding: 30px; background: linear-gradient(135deg, #fd7e14 0%, #c1590a 100%); color: white; border-radius: 8px; margin-bottom: 30px;">
+                        <h1 style="margin: 0; font-size: 28px;">🔓 Laboratório de Práticas — Lab ${sala}</h1>
+                        <p style="margin: 10px 0 0 0; font-size: 16px; opacity: 0.9;">IDOR e Quebra de Controle de Acesso - Aula Prática de Segurança</p>
+                    </div>
+
+                    <div style="background: #fff3e6; border-left: 4px solid #fd7e14; padding: 20px; margin-bottom: 30px; border-radius: 4px;">
+                        <h3 style="color: #c1590a; margin-top: 0;">📚 Como Usar:</h3>
+                        <ol style="color: #555; line-height: 1.8; margin: 10px 0;">
+                            <li>Escolha um teste no menu lateral (👈 são 10 desafios diferentes) e leia "O que o aluno faz" e "Ação do ataque"</li>
+                            <li>Siga os passos visitando as telas do laboratório, manipulando IDs, parâmetros e campos como instruído</li>
+                            <li>Quando encontrar a informação pedida, cole a resposta no campo do próprio teste e clique em "Validar Resposta"</li>
+                            <li>Se a resposta estiver certa, o teste é marcado com ✅ — seu progresso fica salvo neste navegador</li>
+                            <li>Se algo der errado, os dados podem ser resetados a qualquer momento no botão mais abaixo no menu lateral (👇)</li>
+                        </ol>
+                    </div>
+
+                    <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                        <a href="/idor/${sala}/perfil/1" style="flex: 1; min-width: 190px; text-decoration: none; display: block; background: white; border: 2px solid #fd7e14; border-radius: 8px; padding: 18px; text-align: center; color: #333; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
+                            <div style="font-size: 28px;">👤</div>
+                            <h4 style="margin: 8px 0 4px 0; color: #fd7e14; font-size:14px;">Meu Perfil</h4>
+                        </a>
+                        <a href="/idor/${sala}/comprovante/1001" style="flex: 1; min-width: 190px; text-decoration: none; display: block; background: white; border: 2px solid #fd7e14; border-radius: 8px; padding: 18px; text-align: center; color: #333; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
+                            <div style="font-size: 28px;">🧾</div>
+                            <h4 style="margin: 8px 0 4px 0; color: #fd7e14; font-size:14px;">Meu Comprovante</h4>
+                        </a>
+                        <a href="/idor/${sala}/conta" style="flex: 1; min-width: 190px; text-decoration: none; display: block; background: white; border: 2px solid #fd7e14; border-radius: 8px; padding: 18px; text-align: center; color: #333; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
+                            <div style="font-size: 28px;">⚙️</div>
+                            <h4 style="margin: 8px 0 4px 0; color: #fd7e14; font-size:14px;">Minha Conta</h4>
+                        </a>
+                        <a href="/idor/${sala}/fatura/MjAwMQ==" style="flex: 1; min-width: 190px; text-decoration: none; display: block; background: white; border: 2px solid #fd7e14; border-radius: 8px; padding: 18px; text-align: center; color: #333; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
+                            <div style="font-size: 28px;">🧾</div>
+                            <h4 style="margin: 8px 0 4px 0; color: #fd7e14; font-size:14px;">Minha Fatura</h4>
+                        </a>
+                        <a href="/idor/${sala}/chamados" style="flex: 1; min-width: 190px; text-decoration: none; display: block; background: white; border: 2px solid #fd7e14; border-radius: 8px; padding: 18px; text-align: center; color: #333; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
+                            <div style="font-size: 28px;">🎫</div>
+                            <h4 style="margin: 8px 0 4px 0; color: #fd7e14; font-size:14px;">Meus Chamados</h4>
+                        </a>
+                        <a href="/idor/${sala}/pedidos" style="flex: 1; min-width: 190px; text-decoration: none; display: block; background: white; border: 2px solid #fd7e14; border-radius: 8px; padding: 18px; text-align: center; color: #333; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
+                            <div style="font-size: 28px;">📦</div>
+                            <h4 style="margin: 8px 0 4px 0; color: #fd7e14; font-size:14px;">Meus Pedidos</h4>
+                        </a>
+                        <a href="/idor/${sala}/mensagem/5001" style="flex: 1; min-width: 190px; text-decoration: none; display: block; background: white; border: 2px solid #fd7e14; border-radius: 8px; padding: 18px; text-align: center; color: #333; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
+                            <div style="font-size: 28px;">✉️</div>
+                            <h4 style="margin: 8px 0 4px 0; color: #fd7e14; font-size:14px;">Minhas Mensagens</h4>
+                        </a>
+                    </div>
+
+                    <p style="margin-top:20px; color:#999; font-size:12px;">💡 O painel administrativo e a API de exemplo (Testes 4 e 6) não têm atalho aqui de propósito — parte do exercício é perceber que, mesmo sem nenhum link visível, essas rotas continuam acessíveis. Veja o passo a passo de cada teste no menu lateral.</p>
+                </div>
+            </div>
+            <script>
+                window.SALA_ATUAL = '${sala}';
+                ${scriptAccordionIdor}
+                aplicarProgressoSalvoIdor('${sala}');
+            </script>
+        </body>
+        </html>
+    `);
+});
+
+// 1.5 COMPROVANTE DE PAGAMENTO — ID sequencial e previsível, sem checagem de dono (Teste 1)
+app.get('/idor/:sala/comprovante/:numero', async (req, res) => {
+    const { sala } = req.params;
+    const numero = parseInt(req.params.numero, 10);
+    if (Number.isNaN(numero)) return res.status(400).send(paginaIdor(sala, 'Número inválido', '<h2>❌ Número de comprovante inválido</h2>'));
+
+    try {
+        const r = await pool.query('SELECT * FROM idor_comprovantes WHERE sala=$1 AND numero=$2', [sala, numero]);
+        if (r.rows.length === 0) return res.status(404).send(paginaIdor(sala, 'Não encontrado', '<h2>❌ Comprovante não encontrado</h2>'));
+        const c = r.rows[0];
+        const html = `
+            <h2>🧾 Comprovante de Pagamento #${c.numero} — Lab ${sala}</h2>
+            <p style="color:#666;">A URL usa um número sequencial e previsível — sem nenhuma verificação de que este comprovante pertence a quem está "logado" (perfil 1).</p>
+            <div style="background:#f8f9fa; border:1px solid #ddd; border-radius:4px; padding:20px;">
+                <p><strong>Descrição:</strong> ${escapeHtml(c.descricao)}</p>
+                <p><strong>Valor:</strong> R$ ${c.valor}</p>
+            </div>
+        `;
+        res.send(paginaIdor(sala, 'Comprovante', html));
+    } catch (error) {
+        res.status(500).send(paginaIdor(sala, 'Erro', `<p style="color:red;">❌ Erro: ${escapeHtml(error.message)}</p>`));
+    }
+});
+
+// 2. PERFIL DE USUÁRIO — leitura (Teste 2) e formulário de edição — escrita (Teste 3)
+app.get('/idor/:sala/perfil/:numero', async (req, res) => {
+    const { sala } = req.params;
+    const numero = parseInt(req.params.numero, 10);
+    if (Number.isNaN(numero)) return res.status(400).send(paginaIdor(sala, 'Número inválido', '<h2>❌ Número de perfil inválido</h2>'));
+
+    try {
+        const r = await pool.query('SELECT * FROM idor_perfis WHERE sala=$1 AND numero=$2', [sala, numero]);
+        if (r.rows.length === 0) return res.status(404).send(paginaIdor(sala, 'Não encontrado', '<h2>❌ Perfil não encontrado</h2>'));
+        const p = r.rows[0];
+        const html = `
+            <h2>👤 Perfil de Usuário — Lab ${sala}</h2>
+            <p style="color:#666;">Exibindo todas as informações do perfil número <strong>${p.numero}</strong>, sem nenhuma verificação de que ele pertence a quem está "logado" (perfil 1).</p>
+            <div style="background:#f8f9fa; border:1px solid #ddd; border-radius:4px; padding:20px;">
+                <p><strong>Nome:</strong> ${escapeHtml(p.nome)}</p>
+                <p><strong>E-mail:</strong> ${escapeHtml(p.email)}</p>
+                <p><strong>Telefone:</strong> ${escapeHtml(p.telefone)}</p>
+                <p><strong>Cargo:</strong> ${escapeHtml(p.cargo)}</p>
+                <p><strong>Salário:</strong> R$ ${p.salario}</p>
+                <p><strong>CPF:</strong> ${escapeHtml(p.cpf)}</p>
+                <p><strong>Bio:</strong> ${escapeHtml(p.bio)}</p>
+            </div>
+            <p style="margin-top:15px;"><a href="/idor/${sala}/perfil/${p.numero}/editar" style="color:#fd7e14;">✏️ Editar este perfil</a></p>
+        `;
+        res.send(paginaIdor(sala, 'Perfil de ' + p.nome, html));
+    } catch (error) {
+        res.status(500).send(paginaIdor(sala, 'Erro', `<p style="color:red;">❌ Erro: ${escapeHtml(error.message)}</p>`));
+    }
+});
+
+app.get('/idor/:sala/perfil/:numero/editar', async (req, res) => {
+    const { sala } = req.params;
+    const numero = parseInt(req.params.numero, 10);
+    if (Number.isNaN(numero)) return res.status(400).send(paginaIdor(sala, 'Número inválido', '<h2>❌ Número de perfil inválido</h2>'));
+
+    try {
+        const r = await pool.query('SELECT * FROM idor_perfis WHERE sala=$1 AND numero=$2', [sala, numero]);
+        if (r.rows.length === 0) return res.status(404).send(paginaIdor(sala, 'Não encontrado', '<h2>❌ Perfil não encontrado</h2>'));
+        const p = r.rows[0];
+        const html = `
+            <h2>✏️ Editando Perfil #${p.numero} (${escapeHtml(p.nome)})</h2>
+            <p style="color:#666;">Este formulário deveria editar <strong>apenas o seu próprio perfil</strong> (#1), mas o servidor nunca confere se o número na URL é realmente o seu.</p>
+            <form action="/idor/${sala}/perfil/${p.numero}/editar" method="POST" style="background:#f8f9fa; border:1px solid #ddd; border-radius:4px; padding:20px;">
+                <label style="font-weight:bold; display:block; margin-bottom:6px;">Bio:</label>
+                <textarea name="bio" rows="3" style="width:100%; padding:10px; margin-bottom:14px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box;">${escapeHtml(p.bio)}</textarea>
+                <button type="submit" style="padding:12px 25px; background:#fd7e14; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Salvar Alterações</button>
+            </form>
+            <p style="margin-top:15px;"><a href="/idor/${sala}/perfil/${p.numero}" style="color:#fd7e14;">👁️ Ver perfil</a></p>
+        `;
+        res.send(paginaIdor(sala, 'Editar Perfil', html));
+    } catch (error) {
+        res.status(500).send(paginaIdor(sala, 'Erro', `<p style="color:red;">❌ Erro: ${escapeHtml(error.message)}</p>`));
+    }
+});
+
+app.post('/idor/:sala/perfil/:numero/editar', async (req, res) => {
+    const { sala } = req.params;
+    const numero = parseInt(req.params.numero, 10);
+    const { bio } = req.body;
+    if (Number.isNaN(numero)) return res.status(400).send(paginaIdor(sala, 'Número inválido', '<h2>❌ Número de perfil inválido</h2>'));
+
+    try {
+        await pool.query('UPDATE idor_perfis SET bio=$1 WHERE sala=$2 AND numero=$3', [bio, sala, numero]);
+        res.redirect(`/idor/${sala}/perfil/${numero}`);
+    } catch (error) {
+        res.status(500).send(paginaIdor(sala, 'Erro', `<p style="color:red;">❌ Erro: ${escapeHtml(error.message)}</p>`));
+    }
+});
+
+// 3. PAINEL ADMINISTRATIVO — acessível por qualquer um, sem checagem de papel (Teste 4)
+app.get('/idor/:sala/admin/usuarios', async (req, res) => {
+    const { sala } = req.params;
+    try {
+        const r = await pool.query('SELECT * FROM idor_perfis WHERE sala=$1 ORDER BY numero', [sala]);
+        const linhas = r.rows.map(p => `
+            <tr>
+                <td style="padding:8px; border:1px solid #ddd;">${p.numero}</td>
+                <td style="padding:8px; border:1px solid #ddd;">${escapeHtml(p.nome)}</td>
+                <td style="padding:8px; border:1px solid #ddd;">${escapeHtml(p.cargo)}</td>
+                <td style="padding:8px; border:1px solid #ddd;">R$ ${p.salario}</td>
+                <td style="padding:8px; border:1px solid #ddd;">${escapeHtml(p.cpf)}</td>
+            </tr>
+        `).join('');
+        const html = `
+            <h2>🔐 Painel Administrativo — Lab ${sala}</h2>
+            <p style="color:#666;">Esta página deveria existir apenas para administradores do sistema, mas não há nenhum link para ela em nenhum menu — e o servidor também nunca verifica se quem está acessando tem permissão. Basta conhecer (ou adivinhar) o endereço.</p>
+            <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="background:#f2f2f2;">
+                        <th style="padding:8px; border:1px solid #ddd; text-align:left;">#</th>
+                        <th style="padding:8px; border:1px solid #ddd; text-align:left;">Nome</th>
+                        <th style="padding:8px; border:1px solid #ddd; text-align:left;">Cargo</th>
+                        <th style="padding:8px; border:1px solid #ddd; text-align:left;">Salário</th>
+                        <th style="padding:8px; border:1px solid #ddd; text-align:left;">CPF</th>
+                    </tr>
+                </thead>
+                <tbody>${linhas}</tbody>
+            </table>
+        `;
+        res.send(paginaIdor(sala, 'Painel Admin', html));
+    } catch (error) {
+        res.status(500).send(paginaIdor(sala, 'Erro', `<p style="color:red;">❌ Erro: ${escapeHtml(error.message)}</p>`));
+    }
+});
+
+// 4. MINHA CONTA — revela um segredo só se o papel do perfil 1 for "admin" (Teste 5, alvo)
+app.get('/idor/:sala/conta', async (req, res) => {
+    const { sala } = req.params;
+    try {
+        const r = await pool.query('SELECT * FROM idor_perfis WHERE sala=$1 AND numero=1', [sala]);
+        const p = r.rows[0];
+        const ehAdmin = p.papel === 'admin';
+        const html = `
+            <h2>👤 Minha Conta — Lab ${sala}</h2>
+            <p><strong>Nome:</strong> ${escapeHtml(p.nome)}</p>
+            <p><strong>Cargo atual:</strong> ${ehAdmin ? 'Administrador' : 'Aluno'}</p>
+            <div style="background:${ehAdmin ? '#d4edda' : '#f8d7da'}; border-left:4px solid ${ehAdmin ? '#28a745' : '#dc3545'}; padding:15px; margin-top:15px; border-radius:4px;">
+                ${ehAdmin
+                    ? '<strong>🔓 Você desbloqueou o cofre dos administradores:</strong> SENHA-MASTER-2024'
+                    : '<strong>🔒 Conteúdo bloqueado:</strong> somente administradores podem ver isso.'}
+            </div>
+            <p style="margin-top:15px;"><a href="/idor/${sala}/conta/editar" style="color:#fd7e14;">✏️ Editar minha conta</a></p>
+        `;
+        res.send(paginaIdor(sala, 'Minha Conta', html));
+    } catch (error) {
+        res.status(500).send(paginaIdor(sala, 'Erro', `<p style="color:red;">❌ Erro: ${escapeHtml(error.message)}</p>`));
+    }
+});
+
+// 5. EDITAR MINHA CONTA — formulário com campo "papel" escondido aceito sem questionar (Teste 5, exploração)
+app.get('/idor/:sala/conta/editar', async (req, res) => {
+    const { sala } = req.params;
+    try {
+        const r = await pool.query('SELECT * FROM idor_perfis WHERE sala=$1 AND numero=1', [sala]);
+        const p = r.rows[0];
+        const html = `
+            <h2>✏️ Editar Minha Conta — Lab ${sala}</h2>
+            <p style="color:#666;">Formulário normal de edição de perfil. Repare que existe um campo escondido (<code>papel</code>) que o formulário envia junto, mas que nunca é mostrado na tela — e o servidor confia nele sem questionar.</p>
+            <form action="/idor/${sala}/conta/editar" method="POST" style="background:#f8f9fa; border:1px solid #ddd; border-radius:4px; padding:20px;">
+                <label style="font-weight:bold; display:block; margin-bottom:6px;">Nome:</label>
+                <input type="text" name="nome" value="${escapeHtml(p.nome)}" style="width:100%; padding:10px; margin-bottom:14px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box;">
+                <label style="font-weight:bold; display:block; margin-bottom:6px;">Bio:</label>
+                <textarea name="bio" rows="3" style="width:100%; padding:10px; margin-bottom:14px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box;">${escapeHtml(p.bio)}</textarea>
+                <input type="hidden" name="papel" value="${escapeHtml(p.papel)}">
+                <button type="submit" style="padding:12px 25px; background:#fd7e14; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Salvar Alterações</button>
+            </form>
+            <p style="margin-top:15px; color:#856404; font-size:13px;">💡 Dica: use o "Inspecionar Elemento" do navegador para encontrar o campo escondido <code>papel</code> e mudar o valor antes de clicar em Salvar.</p>
+        `;
+        res.send(paginaIdor(sala, 'Editar Conta', html));
+    } catch (error) {
+        res.status(500).send(paginaIdor(sala, 'Erro', `<p style="color:red;">❌ Erro: ${escapeHtml(error.message)}</p>`));
+    }
+});
+
+app.post('/idor/:sala/conta/editar', async (req, res) => {
+    const { sala } = req.params;
+    const { nome, bio, papel } = req.body;
+    try {
+        await pool.query('UPDATE idor_perfis SET nome=$1, bio=$2, papel=$3 WHERE sala=$4 AND numero=1', [nome, bio, papel || 'aluno', sala]);
+        res.redirect(`/idor/${sala}/conta`);
+    } catch (error) {
+        res.status(500).send(paginaIdor(sala, 'Erro', `<p style="color:red;">❌ Erro: ${escapeHtml(error.message)}</p>`));
+    }
+});
+
+// 6. API JSON — devolve dados de qualquer perfil sem checar quem está pedindo (Teste 6)
+app.get('/idor/:sala/api/perfil/:numero', async (req, res) => {
+    const { sala } = req.params;
+    const numero = parseInt(req.params.numero, 10);
+    if (Number.isNaN(numero)) return res.status(400).json({ erro: 'numero inválido' });
+
+    try {
+        const r = await pool.query('SELECT numero, nome, cargo, email, token FROM idor_perfis WHERE sala=$1 AND numero=$2', [sala, numero]);
+        if (r.rows.length === 0) return res.status(404).json({ erro: 'perfil não encontrado' });
+        res.json(r.rows[0]);
+    } catch (error) {
+        res.status(500).json({ erro: error.message });
+    }
+});
+
+// 7. FATURA COM ID EM BASE64 — decodificar o ID não exige nada além de um clique (Teste 7)
+app.get('/idor/:sala/fatura/:codigo', async (req, res) => {
+    const { sala, codigo } = req.params;
+    let numero;
+    try {
+        numero = parseInt(Buffer.from(codigo, 'base64').toString('utf8'), 10);
+    } catch (e) {
+        numero = NaN;
+    }
+    if (Number.isNaN(numero)) return res.status(400).send(paginaIdor(sala, 'Código inválido', '<h2>❌ Código de fatura inválido</h2>'));
+
+    try {
+        const r = await pool.query('SELECT * FROM idor_faturas WHERE sala=$1 AND numero=$2', [sala, numero]);
+        if (r.rows.length === 0) return res.status(404).send(paginaIdor(sala, 'Não encontrada', '<h2>❌ Fatura não encontrada</h2>'));
+        const f = r.rows[0];
+        const html = `
+            <h2>🧾 Fatura — Lab ${sala}</h2>
+            <p style="color:#666;">O ID real (<strong>${f.numero}</strong>) está escondido em Base64 na URL, mas isso não é proteção — é só disfarce reversível.</p>
+            <div style="background:#f8f9fa; border:1px solid #ddd; border-radius:4px; padding:20px;">
+                <p><strong>Descrição:</strong> ${escapeHtml(f.descricao)}</p>
+                <p><strong>Valor:</strong> R$ ${f.valor}</p>
+            </div>
+        `;
+        res.send(paginaIdor(sala, 'Fatura', html));
+    } catch (error) {
+        res.status(500).send(paginaIdor(sala, 'Erro', `<p style="color:red;">❌ Erro: ${escapeHtml(error.message)}</p>`));
+    }
+});
+
+// 8. CHAMADOS DE SUPORTE — listar, ler e excluir, todos sem checar o dono (Teste 8)
+app.get('/idor/:sala/chamados', async (req, res) => {
+    const { sala } = req.params;
+    try {
+        const r = await pool.query('SELECT numero, assunto FROM idor_chamados WHERE sala=$1 AND perfil_numero=1 ORDER BY numero', [sala]);
+        const linhas = r.rows.map(c => `<li><a href="/idor/${sala}/chamado/${c.numero}" style="color:#fd7e14;">#${c.numero} - ${escapeHtml(c.assunto)}</a></li>`).join('');
+        const html = `
+            <h2>🎫 Meus Chamados de Suporte — Lab ${sala}</h2>
+            <p style="color:#666;">Esta lista mostra só os SEUS chamados (perfil #1). Mas as páginas individuais de chamado, abaixo, não verificam de quem é o chamado.</p>
+            <ul style="line-height:2;">${linhas || '<li>Nenhum chamado.</li>'}</ul>
+        `;
+        res.send(paginaIdor(sala, 'Meus Chamados', html));
+    } catch (error) {
+        res.status(500).send(paginaIdor(sala, 'Erro', `<p style="color:red;">❌ Erro: ${escapeHtml(error.message)}</p>`));
+    }
+});
+
+app.get('/idor/:sala/chamado/:numero', async (req, res) => {
+    const { sala } = req.params;
+    const numero = parseInt(req.params.numero, 10);
+    if (Number.isNaN(numero)) return res.status(400).send(paginaIdor(sala, 'Número inválido', '<h2>❌ Número de chamado inválido</h2>'));
+
+    try {
+        const r = await pool.query('SELECT * FROM idor_chamados WHERE sala=$1 AND numero=$2', [sala, numero]);
+        if (r.rows.length === 0) return res.status(404).send(paginaIdor(sala, 'Não encontrado', '<h2>❌ Chamado não encontrado (talvez já tenha sido excluído)</h2>'));
+        const c = r.rows[0];
+        const html = `
+            <h2>🎫 Chamado #${c.numero} — Lab ${sala}</h2>
+            <div style="background:#f8f9fa; border:1px solid #ddd; border-radius:4px; padding:20px;">
+                <p><strong>Assunto:</strong> ${escapeHtml(c.assunto)}</p>
+                <p><strong>Mensagem:</strong> ${escapeHtml(c.mensagem)}</p>
+            </div>
+            <form action="/idor/${sala}/chamado/${c.numero}/excluir" method="POST" style="margin-top:15px;" onsubmit="return confirm('Excluir este chamado, mesmo sem saber se é seu?');">
+                <button type="submit" style="padding:10px 20px; background:#dc3545; color:white; border:none; border-radius:4px; cursor:pointer;">🗑️ Excluir Chamado</button>
+            </form>
+            <p style="margin-top:10px;"><a href="/idor/${sala}/chamados" style="color:#fd7e14;">← Ver meus chamados</a></p>
+        `;
+        res.send(paginaIdor(sala, 'Chamado', html));
+    } catch (error) {
+        res.status(500).send(paginaIdor(sala, 'Erro', `<p style="color:red;">❌ Erro: ${escapeHtml(error.message)}</p>`));
+    }
+});
+
+app.post('/idor/:sala/chamado/:numero/excluir', async (req, res) => {
+    const { sala } = req.params;
+    const numero = parseInt(req.params.numero, 10);
+    if (Number.isNaN(numero)) return res.status(400).send(paginaIdor(sala, 'Número inválido', '<h2>❌ Número de chamado inválido</h2>'));
+
+    try {
+        await pool.query('DELETE FROM idor_chamados WHERE sala=$1 AND numero=$2', [sala, numero]);
+        res.send(paginaIdor(sala, 'Excluído', '<h2>🗑️ Chamado excluído com sucesso.</h2><p style="color:#666;">Repare que isso funcionou mesmo sendo o chamado de outra pessoa.</p>'));
+    } catch (error) {
+        res.status(500).send(paginaIdor(sala, 'Erro', `<p style="color:red;">❌ Erro: ${escapeHtml(error.message)}</p>`));
+    }
+});
+
+// 9. PEDIDOS — IDOR via parâmetro na query string em vez de parâmetro na URL (Teste 9)
+app.get('/idor/:sala/pedidos', async (req, res) => {
+    const { sala } = req.params;
+    const usuarioNumero = parseInt(req.query.usuario_numero, 10) || 1;
+    try {
+        const perfilR = await pool.query('SELECT nome FROM idor_perfis WHERE sala=$1 AND numero=$2', [sala, usuarioNumero]);
+        const nomeUsuario = perfilR.rows[0] ? perfilR.rows[0].nome : `usuário #${usuarioNumero}`;
+        const r = await pool.query('SELECT * FROM idor_pedidos WHERE sala=$1 AND perfil_numero=$2 ORDER BY numero', [sala, usuarioNumero]);
+        const linhas = r.rows.map(p => `
+            <tr>
+                <td style="padding:8px; border:1px solid #ddd;">${p.numero}</td>
+                <td style="padding:8px; border:1px solid #ddd;">${escapeHtml(p.item)}</td>
+                <td style="padding:8px; border:1px solid #ddd;">R$ ${p.valor}</td>
+            </tr>
+        `).join('');
+        const html = `
+            <h2>📦 Histórico de Pedidos — Lab ${sala}</h2>
+            <p style="color:#666;">Mostrando os pedidos de <strong>${escapeHtml(nomeUsuario)}</strong> (perfil #${usuarioNumero}), só porque o número está disponível na própria URL (<code>?usuario_numero=${usuarioNumero}</code>).</p>
+            <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="background:#f2f2f2;">
+                        <th style="padding:8px; border:1px solid #ddd; text-align:left;">#</th>
+                        <th style="padding:8px; border:1px solid #ddd; text-align:left;">Item</th>
+                        <th style="padding:8px; border:1px solid #ddd; text-align:left;">Valor</th>
+                    </tr>
+                </thead>
+                <tbody>${linhas || '<tr><td colspan="3" style="padding:15px; text-align:center; color:#999;">Nenhum pedido encontrado.</td></tr>'}</tbody>
+            </table>
+        `;
+        res.send(paginaIdor(sala, 'Pedidos', html));
+    } catch (error) {
+        res.status(500).send(paginaIdor(sala, 'Erro', `<p style="color:red;">❌ Erro: ${escapeHtml(error.message)}</p>`));
+    }
+});
+
+// 10. MENSAGENS PRIVADAS (Teste 10)
+app.get('/idor/:sala/mensagem/:numero', async (req, res) => {
+    const { sala } = req.params;
+    const numero = parseInt(req.params.numero, 10);
+    if (Number.isNaN(numero)) return res.status(400).send(paginaIdor(sala, 'Número inválido', '<h2>❌ Número de mensagem inválido</h2>'));
+
+    try {
+        const r = await pool.query('SELECT * FROM idor_mensagens WHERE sala=$1 AND numero=$2', [sala, numero]);
+        if (r.rows.length === 0) return res.status(404).send(paginaIdor(sala, 'Não encontrada', '<h2>❌ Mensagem não encontrada</h2>'));
+        const m = r.rows[0];
+        const html = `
+            <h2>✉️ Conversa Privada #${m.numero} — Lab ${sala}</h2>
+            <p style="color:#666;">Este deveria ser um canal privado entre um usuário específico e o suporte.</p>
+            <div style="background:#f8f9fa; border:1px solid #ddd; border-radius:4px; padding:20px;">
+                <p>${escapeHtml(m.conteudo)}</p>
+            </div>
+        `;
+        res.send(paginaIdor(sala, 'Mensagem Privada', html));
+    } catch (error) {
+        res.status(500).send(paginaIdor(sala, 'Erro', `<p style="color:red;">❌ Erro: ${escapeHtml(error.message)}</p>`));
+    }
+});
+
+// 11. VALIDAÇÃO DAS RESPOSTAS — compara o que o aluno encontrou com o valor correto guardado no servidor
+app.post('/idor/:sala/validar', (req, res) => {
+    const { testeId, resposta } = req.body;
+    const esperado = RESPOSTAS_IDOR[testeId];
+    if (!esperado) return res.status(400).json({ correto: false, erro: 'Teste desconhecido' });
+
+    const correto = normalizarRespostaIdor(resposta) === normalizarRespostaIdor(esperado);
+    res.json({ correto });
+});
+
+// 12. RESET DOS DADOS DE UMA SALA (restaura perfis, comprovantes, faturas, pedidos, chamados e mensagens)
+app.post('/idor/:sala/reset', async (req, res) => {
+    const { sala } = req.params;
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        await client.query('DELETE FROM idor_perfis WHERE sala=$1', [sala]);
+        for (const p of SEED_IDOR_PERFIS) {
+            await client.query(
+                'INSERT INTO idor_perfis (sala, numero, nome, email, telefone, cargo, salario, cpf, bio, papel, token) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
+                [sala, p.numero, p.nome, p.email, p.telefone, p.cargo, p.salario, p.cpf, p.bio, p.papel, p.token]
+            );
+        }
+
+        await client.query('DELETE FROM idor_comprovantes WHERE sala=$1', [sala]);
+        for (const c of SEED_IDOR_COMPROVANTES) {
+            await client.query('INSERT INTO idor_comprovantes (sala, numero, perfil_numero, valor, descricao) VALUES ($1,$2,$3,$4,$5)', [sala, c.numero, c.perfil_numero, c.valor, c.descricao]);
+        }
+
+        await client.query('DELETE FROM idor_faturas WHERE sala=$1', [sala]);
+        for (const f of SEED_IDOR_FATURAS) {
+            await client.query('INSERT INTO idor_faturas (sala, numero, perfil_numero, valor, descricao) VALUES ($1,$2,$3,$4,$5)', [sala, f.numero, f.perfil_numero, f.valor, f.descricao]);
+        }
+
+        await client.query('DELETE FROM idor_pedidos WHERE sala=$1', [sala]);
+        for (const p of SEED_IDOR_PEDIDOS) {
+            await client.query('INSERT INTO idor_pedidos (sala, numero, perfil_numero, item, valor) VALUES ($1,$2,$3,$4,$5)', [sala, p.numero, p.perfil_numero, p.item, p.valor]);
+        }
+
+        await client.query('DELETE FROM idor_chamados WHERE sala=$1', [sala]);
+        for (const c of SEED_IDOR_CHAMADOS) {
+            await client.query('INSERT INTO idor_chamados (sala, numero, perfil_numero, assunto, mensagem) VALUES ($1,$2,$3,$4,$5)', [sala, c.numero, c.perfil_numero, c.assunto, c.mensagem]);
+        }
+
+        await client.query('DELETE FROM idor_mensagens WHERE sala=$1', [sala]);
+        for (const m of SEED_IDOR_MENSAGENS) {
+            await client.query('INSERT INTO idor_mensagens (sala, numero, perfil_numero, conteudo) VALUES ($1,$2,$3,$4)', [sala, m.numero, m.perfil_numero, m.conteudo]);
+        }
+
+        await client.query('COMMIT');
+        res.json({ sucesso: true, mensagem: `✅ Dados do Lab ${sala} de IDOR resetados com sucesso!` });
     } catch (error) {
         await client.query('ROLLBACK');
         res.status(500).json({ sucesso: false, erro: error.message });
