@@ -1,10 +1,17 @@
 require('dotenv').config(); // 1º LUGAR OBRIGATÓRIO: Carrega as variáveis do arquivo .env antes de tudo!
 const express = require('express');
+const session = require('express-session');
 const { Pool } = require('pg');
 const app = express();
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(session({
+    secret: process.env.SESSION_SECRET || 'lab-idor-segredo-de-aula',
+    resave: false,
+    saveUninitialized: false,
+    cookie: { maxAge: 8 * 60 * 60 * 1000 } // 8 horas, dura a aula inteira
+}));
 
 // Pega as peças separadas do .env (Locais)
 const dbId = process.env.DB_ID;
@@ -1240,39 +1247,162 @@ function paginaIdor(sala, titulo, conteudoHtml) {
     `;
 }
 
-// 0. SELEÇÃO DE SALA (Lab 1 / Lab 2) — mesmo padrão de isolamento usado no lab de XSS
+// Credenciais fixas de turma: cada sala física da aula usa um usuário (não é por aluno individual).
+// "1"/"2" continuam sendo os identificadores internos usados nas rotas e nas tabelas idor_*.
+const CREDENCIAIS_IDOR = {
+    'sala-a': { senha: 'a-sala', sala: '1', nomeExibicao: 'Sala A' },
+    'sala-b': { senha: 'sala-b', sala: '2', nomeExibicao: 'Sala B' }
+};
+
+// 0. LOGIN DA SALA — substitui a seleção livre de sala por usuário/senha por turma
 app.get('/idor', (req, res) => {
+    const erro = req.query.erro === '1';
     res.send(`
-        <div style="font-family: sans-serif; max-width: 800px; margin: 60px auto; padding: 20px;">
-            <div style="text-align: center; padding: 30px; background: linear-gradient(135deg, #fd7e14 0%, #c1590a 100%); color: white; border-radius: 8px; margin-bottom: 40px;">
-                <h1 style="margin: 0; font-size: 32px;">🔓 Laboratório de IDOR</h1>
-                <p style="margin: 10px 0 0 0; font-size: 18px; opacity: 0.9;">Escolha sua sala de testes</p>
+        <div style="font-family: sans-serif; max-width: 480px; margin: 80px auto; padding: 20px;">
+            <div style="text-align: center; padding: 30px; background: linear-gradient(135deg, #fd7e14 0%, #c1590a 100%); color: white; border-radius: 8px; margin-bottom: 30px;">
+                <h1 style="margin: 0; font-size: 28px;">🔓 Laboratório de IDOR</h1>
+                <p style="margin: 10px 0 0 0; font-size: 16px; opacity: 0.9;">Entre com o usuário da sua sala</p>
             </div>
 
-            <p style="text-align:center; color:#666; margin-bottom: 30px;">Cada sala tem seus próprios dados (perfis, comprovantes, chamados etc). O que você alterar no Lab 1 <strong>não afeta</strong> o Lab 2, e vice-versa.</p>
+            ${erro ? '<div style="background:#f8d7da; color:#721c24; padding:12px; border-radius:4px; margin-bottom:20px; text-align:center;">❌ Usuário ou senha inválidos.</div>' : ''}
 
-            <div style="display: flex; gap: 20px; flex-wrap: wrap;">
-                <a href="/idor/1" style="flex: 1; min-width: 240px; text-decoration: none; display: block; background: white; border: 2px solid #fd7e14; border-radius: 8px; padding: 30px; text-align: center; color: #333; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                    <div style="font-size: 48px;">1️⃣</div>
-                    <h2 style="margin: 10px 0 5px 0; color: #fd7e14;">Lab 1</h2>
-                    <p style="color: #666; font-size: 14px;">Sala isolada de testes de IDOR</p>
-                </a>
-                <a href="/idor/2" style="flex: 1; min-width: 240px; text-decoration: none; display: block; background: white; border: 2px solid #fd7e14; border-radius: 8px; padding: 30px; text-align: center; color: #333; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                    <div style="font-size: 48px;">2️⃣</div>
-                    <h2 style="margin: 10px 0 5px 0; color: #fd7e14;">Lab 2</h2>
-                    <p style="color: #666; font-size: 14px;">Sala isolada de testes de IDOR</p>
-                </a>
-            </div>
+            <form action="/idor/login" method="POST" style="background:white; border:2px solid #fd7e14; border-radius:8px; padding:25px;">
+                <label style="font-weight:bold; display:block; margin-bottom:6px;">Usuário:</label>
+                <input type="text" name="usuario" required style="width:100%; padding:10px; margin-bottom:16px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box;" placeholder="Sala-a ou Sala-b">
 
-            <div style="text-align: center; margin-top: 30px;">
+                <label style="font-weight:bold; display:block; margin-bottom:6px;">Senha:</label>
+                <input type="password" name="senha" required style="width:100%; padding:10px; margin-bottom:16px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box;">
+
+                <button type="submit" style="width:100%; padding:12px; background:#fd7e14; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Entrar</button>
+            </form>
+
+            <div style="text-align: center; margin-top: 20px;">
                 <a href="/" style="color:#999; text-decoration:none; font-size:13px;">← Voltar ao Hub</a>
             </div>
         </div>
     `);
 });
 
+app.post('/idor/login', (req, res) => {
+    const usuario = String(req.body.usuario || '').trim().toLowerCase();
+    const senha = String(req.body.senha || '');
+    const conta = CREDENCIAIS_IDOR[usuario];
+
+    if (!conta || conta.senha !== senha) {
+        return res.redirect('/idor?erro=1');
+    }
+
+    req.session.idorSala = conta.sala;
+    req.session.idorNomeExibicao = conta.nomeExibicao;
+    res.redirect(`/idor/${conta.sala}`);
+});
+
+app.get('/idor/logout', (req, res) => {
+    req.session.idorSala = null;
+    req.session.idorNomeExibicao = null;
+    res.redirect('/idor');
+});
+
+// Protege o dashboard e tudo abaixo dele: só entra quem fez login como a sala correspondente
+function exigirLoginIdor(req, res, next) {
+    if (req.session.idorSala && req.session.idorSala === req.params.sala) {
+        return next();
+    }
+    res.redirect('/idor');
+}
+
+// PAINEL OCULTO DO PROFESSOR — sem link em nenhum menu, só quem souber o endereço acessa.
+// Precisa ser registrado ANTES de "/idor/:sala" abaixo, senão o Express trataria
+// "painel-professor" como se fosse o valor de :sala e devolveria 404 antes de chegar aqui.
+// Mostra, lado a lado, quais dos 10 exercícios cada sala já concluiu (dado salvo no servidor
+// em idor_progresso, e não no localStorage do aluno).
+app.get('/idor/painel-professor', async (req, res) => {
+    try {
+        const r = await pool.query('SELECT sala, teste_id, concluido_em FROM idor_progresso');
+        const concluidos = {};
+        r.rows.forEach(row => {
+            concluidos[`${row.sala}:${row.teste_id}`] = row.concluido_em;
+        });
+
+        const linhas = testesIdor.map(teste => {
+            const celulaSala = (salaId) => {
+                const concluidoEm = concluidos[`${salaId}:${teste.id}`];
+                if (concluidoEm) {
+                    return `<td style="padding:10px; border:1px solid #ddd; text-align:center; background:#d4edda;">✅<br><small style="color:#666;">${new Date(concluidoEm).toLocaleString('pt-BR')}</small></td>`;
+                }
+                return '<td style="padding:10px; border:1px solid #ddd; text-align:center; background:#f8d7da; color:#721c24;">❌</td>';
+            };
+            return `
+                <tr>
+                    <td style="padding:10px; border:1px solid #ddd;">${escapeHtml(teste.nome)}</td>
+                    ${celulaSala('1')}
+                    ${celulaSala('2')}
+                </tr>
+            `;
+        }).join('');
+
+        const totalSalaA = Object.keys(concluidos).filter(k => k.startsWith('1:')).length;
+        const totalSalaB = Object.keys(concluidos).filter(k => k.startsWith('2:')).length;
+
+        res.send(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <title>Painel do Professor - Lab IDOR</title>
+            </head>
+            <body style="font-family: sans-serif; max-width: 900px; margin: 40px auto; padding: 20px;">
+                <h2>🧑‍🏫 Painel do Professor — Progresso do Lab de IDOR</h2>
+                <p style="color:#666;">Esta página não tem link em nenhum menu — só quem conhece o endereço acessa.</p>
+
+                <div style="display:flex; gap:15px; margin-bottom:20px;">
+                    <div style="flex:1; background:#fff3e6; border-left:4px solid #fd7e14; padding:15px; border-radius:4px;">
+                        <strong>Sala A</strong> — ${totalSalaA} / 10 concluídos
+                    </div>
+                    <div style="flex:1; background:#fff3e6; border-left:4px solid #fd7e14; padding:15px; border-radius:4px;">
+                        <strong>Sala B</strong> — ${totalSalaB} / 10 concluídos
+                    </div>
+                </div>
+
+                <table style="width:100%; border-collapse:collapse;">
+                    <thead>
+                        <tr style="background:#f2f2f2;">
+                            <th style="padding:10px; border:1px solid #ddd; text-align:left;">Exercício</th>
+                            <th style="padding:10px; border:1px solid #ddd;">Sala A</th>
+                            <th style="padding:10px; border:1px solid #ddd;">Sala B</th>
+                        </tr>
+                    </thead>
+                    <tbody>${linhas}</tbody>
+                </table>
+
+                <div style="margin-top:25px; display:flex; gap:10px;">
+                    <form action="/idor/painel-professor/limpar/1" method="POST" onsubmit="return confirm('Limpar todo o progresso registrado da Sala A?');">
+                        <button type="submit" style="padding:10px 18px; background:#6c757d; color:white; border:none; border-radius:4px; cursor:pointer;">🧹 Limpar progresso da Sala A</button>
+                    </form>
+                    <form action="/idor/painel-professor/limpar/2" method="POST" onsubmit="return confirm('Limpar todo o progresso registrado da Sala B?');">
+                        <button type="submit" style="padding:10px 18px; background:#6c757d; color:white; border:none; border-radius:4px; cursor:pointer;">🧹 Limpar progresso da Sala B</button>
+                    </form>
+                </div>
+            </body>
+            </html>
+        `);
+    } catch (error) {
+        res.status(500).send(`<p style="color:red; font-family:sans-serif;">❌ Erro: ${escapeHtml(error.message)}</p>`);
+    }
+});
+
+app.post('/idor/painel-professor/limpar/:sala', async (req, res) => {
+    const { sala } = req.params;
+    try {
+        await pool.query('DELETE FROM idor_progresso WHERE sala=$1', [sala]);
+        res.redirect('/idor/painel-professor');
+    } catch (error) {
+        res.status(500).send(`<p style="color:red; font-family:sans-serif;">❌ Erro: ${escapeHtml(error.message)}</p>`);
+    }
+});
+
 // 1. DASHBOARD DO LAB DE IDOR (menu lateral com os 10 testes + atalhos para as telas "normais")
-app.get('/idor/:sala', (req, res) => {
+app.get('/idor/:sala', exigirLoginIdor, (req, res) => {
     const { sala } = req.params;
     res.send(`
         <!DOCTYPE html>
@@ -1290,7 +1420,7 @@ app.get('/idor/:sala', (req, res) => {
                     <p>Clique em um teste para ver o passo a passo do ataque e responder o desafio.</p>
                     ${renderMenuIdor()}
                     <button class="reset-btn" onclick="resetarIdor('${sala}')">🔄 Resetar Dados do Lab ${sala}</button>
-                    <a href="/idor" class="nav-link">↔️ Trocar de Sala</a>
+                    <a href="/idor/logout" class="nav-link">🚪 Sair (${escapeHtml(req.session.idorNomeExibicao || '')})</a>
                     <a href="/" class="nav-link">🏠 Voltar ao Hub</a>
                 </div>
 
@@ -1703,12 +1833,26 @@ app.get('/idor/:sala/mensagem/:numero', async (req, res) => {
 });
 
 // 11. VALIDAÇÃO DAS RESPOSTAS — compara o que o aluno encontrou com o valor correto guardado no servidor
-app.post('/idor/:sala/validar', (req, res) => {
+//     e, se acertou, registra a conclusão no banco (idor_progresso) para o painel do professor ver.
+app.post('/idor/:sala/validar', async (req, res) => {
+    const { sala } = req.params;
     const { testeId, resposta } = req.body;
     const esperado = RESPOSTAS_IDOR[testeId];
     if (!esperado) return res.status(400).json({ correto: false, erro: 'Teste desconhecido' });
 
     const correto = normalizarRespostaIdor(resposta) === normalizarRespostaIdor(esperado);
+
+    if (correto) {
+        try {
+            await pool.query(
+                'INSERT INTO idor_progresso (sala, teste_id) VALUES ($1, $2) ON CONFLICT (sala, teste_id) DO UPDATE SET concluido_em = NOW()',
+                [sala, testeId]
+            );
+        } catch (error) {
+            console.error('Erro ao registrar progresso de IDOR:', error.message);
+        }
+    }
+
     res.json({ correto });
 });
 

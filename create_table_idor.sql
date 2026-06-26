@@ -62,6 +62,15 @@ CREATE TABLE IF NOT EXISTS idor_mensagens (
     PRIMARY KEY (sala, numero)
 );
 
+-- Registra, no servidor, quais dos 10 exercícios cada sala já concluiu — usado pelo
+-- painel oculto do professor (/idor/painel-professor) para acompanhar o progresso da turma.
+CREATE TABLE IF NOT EXISTS idor_progresso (
+    sala VARCHAR(10) NOT NULL,
+    teste_id VARCHAR(10) NOT NULL,
+    concluido_em TIMESTAMP NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (sala, teste_id)
+);
+
 -- Seeds: os mesmos dados em cada sala (1 e 2), para ficarem isolados mas idênticos
 DO $$
 DECLARE
