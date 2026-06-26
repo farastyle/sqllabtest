@@ -945,38 +945,82 @@ app.post('/xss/:sala/reset', async (req, res) => {
 // LABORATÓRIO DE IDOR / QUEBRA DE CONTROLE DE ACESSO
 // ============================================================
 
-const SEED_IDOR_PERFIS = [
-    { numero: 1, nome: 'Você (Aluno QA)', email: 'aluno@lab.com', telefone: '(11) 90000-0001', cargo: 'Estagiário(a) de QA', salario: 1800.00, cpf: '000.000.000-00', bio: 'Aprendendo sobre segurança ofensiva', papel: 'aluno', token: null },
-    { numero: 2, nome: 'Marina Silva', email: 'marina.silva@empresa-lab.com', telefone: '(11) 98877-6655', cargo: 'Gerente Financeira', salario: 12300.00, cpf: '111.222.333-44', bio: 'Adoro café e planilhas de Excel', papel: 'aluno', token: null },
-    { numero: 3, nome: 'Carlos Mendes', email: 'carlos.mendes@empresa-lab.com', telefone: '(11) 97766-5544', cargo: 'Diretor de TI', salario: 18750.00, cpf: '123.456.789-00', bio: '30 anos de carreira em tecnologia', papel: 'aluno', token: 'TKN-CM-58231' },
-    { numero: 4, nome: 'Beatriz Souza', email: 'beatriz.souza@empresa-lab.com', telefone: '(11) 96655-4433', cargo: 'Analista de Compras', salario: 5200.00, cpf: '222.333.444-55', bio: 'Apaixonada por logística', papel: 'aluno', token: null },
-    { numero: 5, nome: 'Roberto Alves', email: 'roberto.alves@empresa-lab.com', telefone: '(11) 95544-3322', cargo: 'Sócio-Diretor', salario: 42000.00, cpf: '333.444.555-66', bio: 'Fundador da empresa', papel: 'aluno', token: null }
-];
+// Os dados (e portanto as respostas) são DIFERENTES entre a sala 1 (Sala A) e a sala 2 (Sala B)
+// de propósito — assim um aluno de uma sala não consegue simplesmente perguntar a resposta
+// para alguém da outra sala, porque o valor lá é outro.
+const SEED_IDOR_PERFIS = {
+    '1': [
+        { numero: 1, nome: 'Você (Aluno QA)', email: 'aluno@lab.com', telefone: '(11) 90000-0001', cargo: 'Estagiário(a) de QA', salario: 1800.00, cpf: '000.000.000-00', bio: 'Aprendendo sobre segurança ofensiva', papel: 'aluno', token: 'TKN-AL-10001' },
+        { numero: 2, nome: 'Marina Silva', email: 'marina.silva@empresa-lab.com', telefone: '(11) 98877-6655', cargo: 'Gerente Financeira', salario: 12300.00, cpf: '111.222.333-44', bio: 'Adoro café e planilhas de Excel', papel: 'aluno', token: 'TKN-MS-20045' },
+        { numero: 3, nome: 'Carlos Mendes', email: 'carlos.mendes@empresa-lab.com', telefone: '(11) 97766-5544', cargo: 'Diretor de TI', salario: 18750.00, cpf: '123.456.789-00', bio: '30 anos de carreira em tecnologia', papel: 'aluno', token: 'TKN-CM-58231' },
+        { numero: 4, nome: 'Beatriz Souza', email: 'beatriz.souza@empresa-lab.com', telefone: '(11) 96655-4433', cargo: 'Analista de Compras', salario: 5200.00, cpf: '222.333.444-55', bio: 'Apaixonada por logística', papel: 'aluno', token: 'TKN-BS-30099' },
+        { numero: 5, nome: 'Roberto Alves', email: 'roberto.alves@empresa-lab.com', telefone: '(11) 95544-3322', cargo: 'Sócio-Diretor', salario: 42000.00, cpf: '333.444.555-66', bio: 'Fundador da empresa', papel: 'aluno', token: 'TKN-RA-40087' }
+    ],
+    '2': [
+        { numero: 1, nome: 'Você (Aluno QA)', email: 'aluno@lab.com', telefone: '(21) 90000-0002', cargo: 'Estagiário(a) de QA', salario: 1800.00, cpf: '000.000.000-00', bio: 'Aprendendo sobre segurança ofensiva', papel: 'aluno', token: 'TKN-AL-90001' },
+        { numero: 2, nome: 'Marina Silva', email: 'marina.silva@empresa-lab.com', telefone: '(21) 99123-4567', cargo: 'Gerente Financeira', salario: 12300.00, cpf: '444.555.666-77', bio: 'Adoro café e planilhas de Excel', papel: 'aluno', token: 'TKN-MS-77410' },
+        { numero: 3, nome: 'Carlos Mendes', email: 'carlos.mendes@empresa-lab.com', telefone: '(21) 97788-2233', cargo: 'Diretor de TI', salario: 18750.00, cpf: '987.654.321-00', bio: '30 anos de carreira em tecnologia', papel: 'aluno', token: 'TKN-CM-90412' },
+        { numero: 4, nome: 'Beatriz Souza', email: 'beatriz.souza@empresa-lab.com', telefone: '(21) 96644-1122', cargo: 'Analista de Compras', salario: 5200.00, cpf: '555.666.777-88', bio: 'Apaixonada por logística', papel: 'aluno', token: 'TKN-BS-66250' },
+        { numero: 5, nome: 'Roberto Alves', email: 'roberto.alves@empresa-lab.com', telefone: '(21) 95533-9988', cargo: 'Sócio-Diretor', salario: 42000.00, cpf: '666.777.888-99', bio: 'Fundador da empresa', papel: 'aluno', token: 'TKN-RA-55310' }
+    ]
+};
 
-const SEED_IDOR_COMPROVANTES = [
-    { numero: 1001, perfil_numero: 1, valor: 1800.00, descricao: 'Pagamento de bolsa-auxílio mensal' },
-    { numero: 1002, perfil_numero: 2, valor: 4750.00, descricao: 'Pagamento de comissão sobre vendas do trimestre' }
-];
+const SEED_IDOR_COMPROVANTES = {
+    '1': [
+        { numero: 1001, perfil_numero: 1, valor: 1800.00, descricao: 'Pagamento de bolsa-auxílio mensal' },
+        { numero: 1002, perfil_numero: 2, valor: 4750.00, descricao: 'Pagamento de comissão sobre vendas do trimestre' }
+    ],
+    '2': [
+        { numero: 1001, perfil_numero: 1, valor: 1800.00, descricao: 'Pagamento de bolsa-auxílio mensal' },
+        { numero: 1002, perfil_numero: 2, valor: 5300.00, descricao: 'Pagamento de bônus de desempenho do semestre' }
+    ]
+};
 
-const SEED_IDOR_FATURAS = [
-    { numero: 2001, perfil_numero: 1, valor: 49.90, descricao: 'Assinatura Mensal Básica' },
-    { numero: 2002, perfil_numero: 4, valor: 899.90, descricao: 'Assinatura Anual Premium' }
-];
+// Faturas usam números 6001/6002 (e não 2001/2002) só para não colidir visualmente com os
+// comprovantes 1001/1002 quando o aluno estiver comparando as duas telas.
+const SEED_IDOR_FATURAS = {
+    '1': [
+        { numero: 6001, perfil_numero: 1, valor: 49.90, descricao: 'Assinatura Mensal Básica' },
+        { numero: 6002, perfil_numero: 4, valor: 899.90, descricao: 'Assinatura Anual Premium' }
+    ],
+    '2': [
+        { numero: 6001, perfil_numero: 1, valor: 49.90, descricao: 'Assinatura Mensal Básica' },
+        { numero: 6002, perfil_numero: 4, valor: 1290.00, descricao: 'Plano Corporativo Premium Anual' }
+    ]
+};
 
-const SEED_IDOR_PEDIDOS = [
-    { numero: 3001, perfil_numero: 1, item: 'Curso Online de Introdução à Cibersegurança', valor: 197.00 },
-    { numero: 3002, perfil_numero: 5, item: 'Backup Completo do Banco de Dados Pessoal', valor: 1200.00 }
-];
+const SEED_IDOR_PEDIDOS = {
+    '1': [
+        { numero: 3001, perfil_numero: 1, item: 'Curso Online de Introdução à Cibersegurança', valor: 197.00 },
+        { numero: 3002, perfil_numero: 5, item: 'Backup Completo do Banco de Dados Pessoal', valor: 1200.00 }
+    ],
+    '2': [
+        { numero: 3001, perfil_numero: 1, item: 'Curso Online de Introdução à Cibersegurança', valor: 197.00 },
+        { numero: 3002, perfil_numero: 5, item: 'Exportação Completa da Base de Clientes', valor: 1500.00 }
+    ]
+};
 
-const SEED_IDOR_CHAMADOS = [
-    { numero: 4001, perfil_numero: 1, assunto: 'Dúvida sobre meu boleto', mensagem: 'Olá, gostaria de saber o vencimento do meu boleto deste mês.' },
-    { numero: 4002, perfil_numero: 2, assunto: 'Esqueci minha senha de administrador, me ajudem urgente', mensagem: 'Pessoal, preciso redefinir a senha mestre do sistema financeiro hoje ainda, é urgente.' }
-];
+const SEED_IDOR_CHAMADOS = {
+    '1': [
+        { numero: 4001, perfil_numero: 1, assunto: 'Dúvida sobre meu boleto', mensagem: 'Olá, gostaria de saber o vencimento do meu boleto deste mês.' },
+        { numero: 4002, perfil_numero: 2, assunto: 'Esqueci minha senha de administrador, me ajudem urgente', mensagem: 'Pessoal, preciso redefinir a senha mestre do sistema financeiro hoje ainda, é urgente.' }
+    ],
+    '2': [
+        { numero: 4001, perfil_numero: 1, assunto: 'Dúvida sobre meu boleto', mensagem: 'Olá, gostaria de saber o vencimento do meu boleto deste mês.' },
+        { numero: 4002, perfil_numero: 2, assunto: 'Não consigo acessar o painel de administrador, preciso de ajuda agora', mensagem: 'Pessoal, o painel administrativo não abre, preciso disso resolvido com urgência hoje.' }
+    ]
+};
 
-const SEED_IDOR_MENSAGENS = [
-    { numero: 5001, perfil_numero: 1, conteudo: 'Olá! Este é o seu canal privado com o suporte. Em que podemos ajudar?' },
-    { numero: 5002, perfil_numero: 3, conteudo: 'Carlos, segue seu código de recuperação de acesso: 884215. Não compartilhe com ninguém.' }
-];
+const SEED_IDOR_MENSAGENS = {
+    '1': [
+        { numero: 5001, perfil_numero: 1, conteudo: 'Olá! Este é o seu canal privado com o suporte. Em que podemos ajudar?' },
+        { numero: 5002, perfil_numero: 3, conteudo: 'Carlos, segue seu código de recuperação de acesso: 884215. Não compartilhe com ninguém.' }
+    ],
+    '2': [
+        { numero: 5001, perfil_numero: 1, conteudo: 'Olá! Este é o seu canal privado com o suporte. Em que podemos ajudar?' },
+        { numero: 5002, perfil_numero: 3, conteudo: 'Carlos, segue seu código de recuperação de acesso: 552031. Não compartilhe com ninguém.' }
+    ]
+};
 
 // As 10 lições do laboratório de IDOR — cada uma explica o que o aluno faz normalmente,
 // qual é a ação do ataque (manipulação) e a lição de segurança, seguindo o mesmo formato
@@ -1002,9 +1046,9 @@ const testesIdor = [
         id: 'idor3',
         nome: '3️⃣ IDOR de Escrita (Alterando Dados de Outra Pessoa)',
         oQueAlunoFaz: 'Acesse /idor/SALA/perfil/1/editar e altere sua própria bio normalmente, para entender como o formulário funciona.',
-        acaoDoAtaque: 'Troque o número na URL para /idor/SALA/perfil/2/editar (perfil de Marina) e altere a bio dela para exatamente esta frase: "Perfil comprometido via falha de IDOR". Depois acesse /idor/SALA/perfil/2 para confirmar que a alteração foi salva.',
+        acaoDoAtaque: 'Troque o número na URL para /idor/SALA/perfil/2/editar (perfil de Marina) e altere a bio dela para exatamente esta frase: "Perfil comprometido via falha de IDOR". Depois acesse /idor/SALA/perfil/2 para ver o resultado.',
         licao: 'IDOR não serve só para ler dados de outras pessoas — quando a operação é de escrita, o impacto é ainda maior: você está alterando informação de quem não tem nenhuma relação com a sua conta.',
-        pergunta: 'Depois de editar, qual frase aparece agora no campo Bio do perfil de Marina (perfil 2)?'
+        pergunta: 'Depois de salvar a frase indicada na bio de Marina (perfil 2), um código de confirmação aparece na tela do perfil dela. Qual é esse código?'
     },
     {
         id: 'idor4',
@@ -1016,10 +1060,10 @@ const testesIdor = [
     },
     {
         id: 'idor5',
-        nome: '5️⃣ Escalonamento de Privilégio via Campo Oculto',
+        nome: '5️⃣ Escalonamento de Privilégio Auto-Atribuído',
         oQueAlunoFaz: 'Acesse /idor/SALA/conta para ver seu cargo atual ("Aluno") e o aviso de que o conteúdo de administrador está bloqueado. Depois acesse /idor/SALA/conta/editar para ver o formulário de edição.',
-        acaoDoAtaque: 'Use o "Inspecionar Elemento" do navegador (botão direito → Inspecionar) para encontrar um campo escondido chamado papel no formulário. Mude o valor dele de "aluno" para "admin" direto no HTML e clique em Salvar. Depois volte para /idor/SALA/conta.',
-        licao: 'Campos escondidos (hidden inputs) não são seguros — eles só não aparecem na tela, mas qualquer pessoa pode editá-los antes de enviar o formulário. Confiar nesse valor para decidir permissões é chamado de "mass assignment" e permite que o próprio usuário se promova a administrador.',
+        acaoDoAtaque: 'No formulário, troque o campo "Tipo de conta" de Aluno para Administrador e clique em Salvar — sem precisar de nenhuma ferramenta extra. Depois volte para /idor/SALA/conta.',
+        licao: 'Um formulário nunca deveria deixar o próprio usuário escolher seu nível de acesso. Se o servidor aceita e grava esse valor sem checar se quem está pedindo tem permissão para se tornar administrador, qualquer aluno consegue se autopromover.',
         pergunta: 'Qual é a senha do cofre de administradores revelada na sua conta depois da escalada de privilégio?'
     },
     {
@@ -1032,11 +1076,11 @@ const testesIdor = [
     },
     {
         id: 'idor7',
-        nome: '7️⃣ ID "Escondido" em Base64 (Ofuscação não é Proteção)',
-        oQueAlunoFaz: 'Acesse sua fatura em /idor/SALA/fatura/MjAwMQ== e note que o número não aparece "limpo" na URL — ele está em Base64 (MjAwMQ== é o código 2001).',
-        acaoDoAtaque: 'Decodifique o código (existem decodificadores de Base64 gratuitos online, ou o Console do navegador com atob("MjAwMQ==")), some 1 ao número (2002), gere o novo código em Base64 e cole na URL no lugar do antigo.',
-        licao: 'Disfarçar um ID em Base64, hexadecimal ou qualquer outra codificação não é criptografia — é só uma transformação reversível em segundos. Se a única proteção for "esconder" o formato do ID, ela não é proteção nenhuma.',
-        pergunta: 'Qual é a descrição da fatura que você encontrou ao acessar o ID 2002 codificado?'
+        nome: '7️⃣ ID com Dígitos Invertidos (Ofuscação não é Proteção)',
+        oQueAlunoFaz: 'Acesse sua fatura em /idor/SALA/fatura/1006 e note que o número não aparece "limpo" na URL — os dígitos estão invertidos (1006 ao contrário é 6001, o seu número real).',
+        acaoDoAtaque: 'A fatura de Beatriz Souza é a 6002. Inverta os dígitos de cabeça (sem precisar de nenhum site ou ferramenta): 6002 invertido fica 2006. Acesse /idor/SALA/fatura/2006.',
+        licao: 'Disfarçar um ID invertendo os dígitos (ou em Base64, hexadecimal etc.) não é criptografia — é só uma transformação simples de desfazer. Se a única "proteção" for esconder o formato do ID, ela não é proteção nenhuma.',
+        pergunta: 'Qual é a descrição da fatura que você encontrou ao acessar o ID 2006 (6002 invertido)?'
     },
     {
         id: 'idor8',
@@ -1064,18 +1108,34 @@ const testesIdor = [
     }
 ];
 
-// Respostas corretas de cada desafio — nunca são enviadas ao navegador, só comparadas no servidor
+// Respostas corretas de cada desafio — nunca são enviadas ao navegador, só comparadas no servidor.
+// Cada sala tem o seu próprio conjunto, diferente do da outra sala (ver SEED_IDOR_* acima),
+// então a resposta de um aluno da Sala A não serve para validar nada na Sala B.
 const RESPOSTAS_IDOR = {
-    idor1: 'Pagamento de comissão sobre vendas do trimestre',
-    idor2: '(11) 98877-6655',
-    idor3: 'Perfil comprometido via falha de IDOR',
-    idor4: '123.456.789-00',
-    idor5: 'SENHA-MASTER-2024',
-    idor6: 'TKN-CM-58231',
-    idor7: 'Assinatura Anual Premium',
-    idor8: 'Esqueci minha senha de administrador, me ajudem urgente',
-    idor9: 'Backup Completo do Banco de Dados Pessoal',
-    idor10: '884215'
+    '1': {
+        idor1: 'Pagamento de comissão sobre vendas do trimestre',
+        idor2: '(11) 98877-6655',
+        idor3: 'IDOR-A-7731',
+        idor4: '123.456.789-00',
+        idor5: 'SENHA-MASTER-2024',
+        idor6: 'TKN-CM-58231',
+        idor7: 'Assinatura Anual Premium',
+        idor8: 'Esqueci minha senha de administrador, me ajudem urgente',
+        idor9: 'Backup Completo do Banco de Dados Pessoal',
+        idor10: '884215'
+    },
+    '2': {
+        idor1: 'Pagamento de bônus de desempenho do semestre',
+        idor2: '(21) 99123-4567',
+        idor3: 'IDOR-B-4408',
+        idor4: '987.654.321-00',
+        idor5: 'COFRE-ADMIN-7793',
+        idor6: 'TKN-CM-90412',
+        idor7: 'Plano Corporativo Premium Anual',
+        idor8: 'Não consigo acessar o painel de administrador, preciso de ajuda agora',
+        idor9: 'Exportação Completa da Base de Clientes',
+        idor10: '552031'
+    }
 };
 
 // Compara respostas ignorando acentos, maiúsculas/minúsculas e qualquer pontuação/espaçamento,
@@ -1087,17 +1147,21 @@ function normalizarRespostaIdor(s) {
         .replace(/[^a-z0-9]/g, '');
 }
 
-function renderMenuIdor() {
+function renderMenuIdor(sala) {
     let menu = '';
     testesIdor.forEach(teste => {
+        // As instruções são escritas com o placeholder "SALA", substituído aqui pela sala real
+        // de quem está logado — sem isso, o aluno via literalmente "/idor/SALA/..." na tela.
+        const oQueAlunoFaz = teste.oQueAlunoFaz.replace(/SALA/g, sala);
+        const acaoDoAtaque = teste.acaoDoAtaque.replace(/SALA/g, sala);
         menu += `
             <div class="teste-item">
                 <a href="javascript:void(0)" class="teste-link" id="link-${teste.id}" onclick="toggleTesteIdor('${teste.id}')">
                     <strong style="font-size:13px;" id="titulo-${teste.id}">${escapeHtml(teste.nome)}</strong>
                 </a>
                 <div class="teste-panel" id="panel-${teste.id}">
-                    <p style="margin:6px 0; color:#333; font-size:12px;"><strong>📍 O que o aluno faz:</strong> ${escapeHtml(teste.oQueAlunoFaz)}</p>
-                    <p style="margin:6px 0; color:#a14e00; font-size:12px;"><strong>⚔️ Ação do ataque:</strong> ${escapeHtml(teste.acaoDoAtaque)}</p>
+                    <p style="margin:6px 0; color:#333; font-size:12px;"><strong>📍 O que o aluno faz:</strong> ${escapeHtml(oQueAlunoFaz)}</p>
+                    <p style="margin:6px 0; color:#a14e00; font-size:12px;"><strong>⚔️ Ação do ataque:</strong> ${escapeHtml(acaoDoAtaque)}</p>
                     <p style="margin:6px 0; color:#155724; font-size:12px;"><strong>🎓 Lição:</strong> ${escapeHtml(teste.licao)}</p>
                     <div style="background:white; border:1px solid #fd7e14; border-radius:4px; padding:10px; margin-top:10px;">
                         <p style="margin:0 0 6px 0; font-size:12px; font-weight:bold; color:#333;">${escapeHtml(teste.pergunta)}</p>
@@ -1418,7 +1482,7 @@ app.get('/idor/:sala', exigirLoginIdor, (req, res) => {
                     <h2>🔓 10 Testes de IDOR</h2>
                     <p id="contador-progresso" style="font-weight:bold; color:#fd7e14;">0 / 10 concluídos</p>
                     <p>Clique em um teste para ver o passo a passo do ataque e responder o desafio.</p>
-                    ${renderMenuIdor()}
+                    ${renderMenuIdor(sala)}
                     <button class="reset-btn" onclick="resetarIdor('${sala}')">🔄 Resetar Dados do Lab ${sala}</button>
                     <a href="/idor/logout" class="nav-link">🚪 Sair (${escapeHtml(req.session.idorNomeExibicao || '')})</a>
                     <a href="/" class="nav-link">🏠 Voltar ao Hub</a>
@@ -1454,7 +1518,7 @@ app.get('/idor/:sala', exigirLoginIdor, (req, res) => {
                             <div style="font-size: 28px;">⚙️</div>
                             <h4 style="margin: 8px 0 4px 0; color: #fd7e14; font-size:14px;">Minha Conta</h4>
                         </a>
-                        <a href="/idor/${sala}/fatura/MjAwMQ==" style="flex: 1; min-width: 190px; text-decoration: none; display: block; background: white; border: 2px solid #fd7e14; border-radius: 8px; padding: 18px; text-align: center; color: #333; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
+                        <a href="/idor/${sala}/fatura/1006" style="flex: 1; min-width: 190px; text-decoration: none; display: block; background: white; border: 2px solid #fd7e14; border-radius: 8px; padding: 18px; text-align: center; color: #333; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
                             <div style="font-size: 28px;">🧾</div>
                             <h4 style="margin: 8px 0 4px 0; color: #fd7e14; font-size:14px;">Minha Fatura</h4>
                         </a>
@@ -1519,6 +1583,22 @@ app.get('/idor/:sala/perfil/:numero', async (req, res) => {
         const r = await pool.query('SELECT * FROM idor_perfis WHERE sala=$1 AND numero=$2', [sala, numero]);
         if (r.rows.length === 0) return res.status(404).send(paginaIdor(sala, 'Não encontrado', '<h2>❌ Perfil não encontrado</h2>'));
         const p = r.rows[0];
+
+        // Teste 3 (IDOR de escrita): se a bio de Marina (perfil 2) foi alterada para a frase
+        // pedida no exercício, revela um código de confirmação — esse código é a resposta,
+        // não a frase em si, então colar a frase de volta no campo de resposta não vale ponto.
+        let blocoRevelado = '';
+        if (numero === 2) {
+            const fraseGatilho = normalizarRespostaIdor('Perfil comprometido via falha de IDOR');
+            if (normalizarRespostaIdor(p.bio) === fraseGatilho) {
+                blocoRevelado = `
+                    <div style="background:#d4edda; border-left:4px solid #28a745; padding:15px; margin-top:15px; border-radius:4px;">
+                        <strong>🔓 Alteração detectada! Código de confirmação da invasão:</strong> ${escapeHtml(RESPOSTAS_IDOR[sala].idor3)}
+                    </div>
+                `;
+            }
+        }
+
         const html = `
             <h2>👤 Perfil de Usuário — Lab ${sala}</h2>
             <p style="color:#666;">Exibindo todas as informações do perfil número <strong>${p.numero}</strong>, sem nenhuma verificação de que ele pertence a quem está "logado" (perfil 1).</p>
@@ -1531,6 +1611,7 @@ app.get('/idor/:sala/perfil/:numero', async (req, res) => {
                 <p><strong>CPF:</strong> ${escapeHtml(p.cpf)}</p>
                 <p><strong>Bio:</strong> ${escapeHtml(p.bio)}</p>
             </div>
+            ${blocoRevelado}
             <p style="margin-top:15px;"><a href="/idor/${sala}/perfil/${p.numero}/editar" style="color:#fd7e14;">✏️ Editar este perfil</a></p>
         `;
         res.send(paginaIdor(sala, 'Perfil de ' + p.nome, html));
@@ -1627,7 +1708,7 @@ app.get('/idor/:sala/conta', async (req, res) => {
             <p><strong>Cargo atual:</strong> ${ehAdmin ? 'Administrador' : 'Aluno'}</p>
             <div style="background:${ehAdmin ? '#d4edda' : '#f8d7da'}; border-left:4px solid ${ehAdmin ? '#28a745' : '#dc3545'}; padding:15px; margin-top:15px; border-radius:4px;">
                 ${ehAdmin
-                    ? '<strong>🔓 Você desbloqueou o cofre dos administradores:</strong> SENHA-MASTER-2024'
+                    ? `<strong>🔓 Você desbloqueou o cofre dos administradores:</strong> ${escapeHtml(RESPOSTAS_IDOR[sala].idor5)}`
                     : '<strong>🔒 Conteúdo bloqueado:</strong> somente administradores podem ver isso.'}
             </div>
             <p style="margin-top:15px;"><a href="/idor/${sala}/conta/editar" style="color:#fd7e14;">✏️ Editar minha conta</a></p>
@@ -1638,7 +1719,8 @@ app.get('/idor/:sala/conta', async (req, res) => {
     }
 });
 
-// 5. EDITAR MINHA CONTA — formulário com campo "papel" escondido aceito sem questionar (Teste 5, exploração)
+// 5. EDITAR MINHA CONTA — campo "Tipo de conta" visível e editável, mas o servidor aceita
+//    o valor enviado sem checar se quem está pedindo tem permissão para virar admin (Teste 5)
 app.get('/idor/:sala/conta/editar', async (req, res) => {
     const { sala } = req.params;
     try {
@@ -1646,16 +1728,20 @@ app.get('/idor/:sala/conta/editar', async (req, res) => {
         const p = r.rows[0];
         const html = `
             <h2>✏️ Editar Minha Conta — Lab ${sala}</h2>
-            <p style="color:#666;">Formulário normal de edição de perfil. Repare que existe um campo escondido (<code>papel</code>) que o formulário envia junto, mas que nunca é mostrado na tela — e o servidor confia nele sem questionar.</p>
+            <p style="color:#666;">Formulário normal de edição de perfil — repare que ele deixa você escolher seu próprio "Tipo de conta".</p>
             <form action="/idor/${sala}/conta/editar" method="POST" style="background:#f8f9fa; border:1px solid #ddd; border-radius:4px; padding:20px;">
                 <label style="font-weight:bold; display:block; margin-bottom:6px;">Nome:</label>
                 <input type="text" name="nome" value="${escapeHtml(p.nome)}" style="width:100%; padding:10px; margin-bottom:14px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box;">
                 <label style="font-weight:bold; display:block; margin-bottom:6px;">Bio:</label>
                 <textarea name="bio" rows="3" style="width:100%; padding:10px; margin-bottom:14px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box;">${escapeHtml(p.bio)}</textarea>
-                <input type="hidden" name="papel" value="${escapeHtml(p.papel)}">
+                <label style="font-weight:bold; display:block; margin-bottom:6px;">Tipo de conta:</label>
+                <select name="papel" style="width:100%; padding:10px; margin-bottom:14px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box;">
+                    <option value="aluno" ${p.papel === 'aluno' ? 'selected' : ''}>Aluno</option>
+                    <option value="admin" ${p.papel === 'admin' ? 'selected' : ''}>Administrador</option>
+                </select>
                 <button type="submit" style="padding:12px 25px; background:#fd7e14; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Salvar Alterações</button>
             </form>
-            <p style="margin-top:15px; color:#856404; font-size:13px;">💡 Dica: use o "Inspecionar Elemento" do navegador para encontrar o campo escondido <code>papel</code> e mudar o valor antes de clicar em Salvar.</p>
+            <p style="margin-top:15px; color:#856404; font-size:13px;">💡 Em um sistema real, nenhum usuário comum deveria conseguir escolher o próprio nível de acesso assim.</p>
         `;
         res.send(paginaIdor(sala, 'Editar Conta', html));
     } catch (error) {
@@ -1689,15 +1775,10 @@ app.get('/idor/:sala/api/perfil/:numero', async (req, res) => {
     }
 });
 
-// 7. FATURA COM ID EM BASE64 — decodificar o ID não exige nada além de um clique (Teste 7)
+// 7. FATURA COM ID EM DÍGITOS INVERTIDOS — desfazer o disfarce é só ler o número ao contrário (Teste 7)
 app.get('/idor/:sala/fatura/:codigo', async (req, res) => {
     const { sala, codigo } = req.params;
-    let numero;
-    try {
-        numero = parseInt(Buffer.from(codigo, 'base64').toString('utf8'), 10);
-    } catch (e) {
-        numero = NaN;
-    }
+    const numero = parseInt(String(codigo).split('').reverse().join(''), 10);
     if (Number.isNaN(numero)) return res.status(400).send(paginaIdor(sala, 'Código inválido', '<h2>❌ Código de fatura inválido</h2>'));
 
     try {
@@ -1706,7 +1787,7 @@ app.get('/idor/:sala/fatura/:codigo', async (req, res) => {
         const f = r.rows[0];
         const html = `
             <h2>🧾 Fatura — Lab ${sala}</h2>
-            <p style="color:#666;">O ID real (<strong>${f.numero}</strong>) está escondido em Base64 na URL, mas isso não é proteção — é só disfarce reversível.</p>
+            <p style="color:#666;">O ID real (<strong>${f.numero}</strong>) está com os dígitos invertidos na URL, mas isso não é proteção — é só disfarce, fácil de desfazer de cabeça.</p>
             <div style="background:#f8f9fa; border:1px solid #ddd; border-radius:4px; padding:20px;">
                 <p><strong>Descrição:</strong> ${escapeHtml(f.descricao)}</p>
                 <p><strong>Valor:</strong> R$ ${f.valor}</p>
@@ -1837,7 +1918,7 @@ app.get('/idor/:sala/mensagem/:numero', async (req, res) => {
 app.post('/idor/:sala/validar', async (req, res) => {
     const { sala } = req.params;
     const { testeId, resposta } = req.body;
-    const esperado = RESPOSTAS_IDOR[testeId];
+    const esperado = (RESPOSTAS_IDOR[sala] || {})[testeId];
     if (!esperado) return res.status(400).json({ correto: false, erro: 'Teste desconhecido' });
 
     const correto = normalizarRespostaIdor(resposta) === normalizarRespostaIdor(esperado);
@@ -1864,7 +1945,7 @@ app.post('/idor/:sala/reset', async (req, res) => {
         await client.query('BEGIN');
 
         await client.query('DELETE FROM idor_perfis WHERE sala=$1', [sala]);
-        for (const p of SEED_IDOR_PERFIS) {
+        for (const p of SEED_IDOR_PERFIS[sala]) {
             await client.query(
                 'INSERT INTO idor_perfis (sala, numero, nome, email, telefone, cargo, salario, cpf, bio, papel, token) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
                 [sala, p.numero, p.nome, p.email, p.telefone, p.cargo, p.salario, p.cpf, p.bio, p.papel, p.token]
@@ -1872,27 +1953,27 @@ app.post('/idor/:sala/reset', async (req, res) => {
         }
 
         await client.query('DELETE FROM idor_comprovantes WHERE sala=$1', [sala]);
-        for (const c of SEED_IDOR_COMPROVANTES) {
+        for (const c of SEED_IDOR_COMPROVANTES[sala]) {
             await client.query('INSERT INTO idor_comprovantes (sala, numero, perfil_numero, valor, descricao) VALUES ($1,$2,$3,$4,$5)', [sala, c.numero, c.perfil_numero, c.valor, c.descricao]);
         }
 
         await client.query('DELETE FROM idor_faturas WHERE sala=$1', [sala]);
-        for (const f of SEED_IDOR_FATURAS) {
+        for (const f of SEED_IDOR_FATURAS[sala]) {
             await client.query('INSERT INTO idor_faturas (sala, numero, perfil_numero, valor, descricao) VALUES ($1,$2,$3,$4,$5)', [sala, f.numero, f.perfil_numero, f.valor, f.descricao]);
         }
 
         await client.query('DELETE FROM idor_pedidos WHERE sala=$1', [sala]);
-        for (const p of SEED_IDOR_PEDIDOS) {
+        for (const p of SEED_IDOR_PEDIDOS[sala]) {
             await client.query('INSERT INTO idor_pedidos (sala, numero, perfil_numero, item, valor) VALUES ($1,$2,$3,$4,$5)', [sala, p.numero, p.perfil_numero, p.item, p.valor]);
         }
 
         await client.query('DELETE FROM idor_chamados WHERE sala=$1', [sala]);
-        for (const c of SEED_IDOR_CHAMADOS) {
+        for (const c of SEED_IDOR_CHAMADOS[sala]) {
             await client.query('INSERT INTO idor_chamados (sala, numero, perfil_numero, assunto, mensagem) VALUES ($1,$2,$3,$4,$5)', [sala, c.numero, c.perfil_numero, c.assunto, c.mensagem]);
         }
 
         await client.query('DELETE FROM idor_mensagens WHERE sala=$1', [sala]);
-        for (const m of SEED_IDOR_MENSAGENS) {
+        for (const m of SEED_IDOR_MENSAGENS[sala]) {
             await client.query('INSERT INTO idor_mensagens (sala, numero, perfil_numero, conteudo) VALUES ($1,$2,$3,$4)', [sala, m.numero, m.perfil_numero, m.conteudo]);
         }
 
