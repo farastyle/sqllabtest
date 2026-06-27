@@ -99,8 +99,14 @@ app.get('/sqli', (req, res) => {
 app.post('/login', async (req, res) => {
     const { email, senha } = req.body;
 
-    // O ERRO INTENCIONAL: Interpolação direta que permite fechar a aspa e anular a query
-    const query = `SELECT * FROM usuarios WHERE email = '${email}' AND senha = '${senha}'`;
+    // O ERRO INTENCIONAL: Interpolação direta que permite fechar a aspa e anular a query.
+    // IMPORTANTE: "senha" vem ANTES de "email" de propósito. Em SQL, AND tem precedência
+    // maior que OR — então com email='\' OR \'1\'=\'1' e senha em qualquer ordem ANTERIOR,
+    // a expressão fica "(senha=X AND email=Y) OR '1'='1'", e o "OR '1'='1'" sozinho no final
+    // já basta para bypassar o login, mesmo sem comentar o resto da query com "--".
+    // Se "email" viesse primeiro, ficaria "email=Y OR ('1'='1' AND senha=X)" e o bypass
+    // simples não funcionaria sem o "--" (foi exatamente o bug que os alunos notaram).
+    const query = `SELECT * FROM usuarios WHERE senha = '${senha}' AND email = '${email}'`;
 
     console.log(`\n🔍 Query executada no banco:\n${query}\n`);
 
