@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Laboratório de XSS — Seleção de Sala</title>
+    <link rel="stylesheet" href="/css/design-system.css">
+</head>
+<body class="ds-body">
+    <div class="ds-container-sm">
+        <div class="ds-header-gradient ds-header-gradient--xss">
+            <h1>🧪 Laboratório de XSS</h1>
+            <p>Escolha sua sala de testes</p>
+        </div>
+
+        <p style="text-align:center; color: var(--color-text-muted); margin-bottom: var(--space-7);">Cada sala tem seu próprio Mural de Recados. O que você postar no Lab 1 <strong>não aparece</strong> no Lab 2, e vice-versa.</p>
+
+        <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+            <a href="/xss/1" class="ds-card ds-card--xss" style="flex: 1; min-width: 240px;">
+                <div class="ds-card-icon">1️⃣</div>
+                <h2 style="color: var(--color-xss-muted);">Lab 1</h2>
+                <p>Sala isolada de testes de XSS</p>
+            </a>
+            <a href="/xss/2" class="ds-card ds-card--xss" style="flex: 1; min-width: 240px;">
+                <div class="ds-card-icon">2️⃣</div>
+                <h2 style="color: var(--color-xss-muted);">Lab 2</h2>
+                <p>Sala isolada de testes de XSS</p>
+            </a>
+        </div>
+
+        <div style="text-align: center; margin-top: var(--space-7);">
+            <a href="/" class="ds-link" style="color: var(--color-text-subtle); font-size: var(--text-sm);">← Voltar ao Hub</a>
+        </div>
+    </div>
+</body>
+</html>

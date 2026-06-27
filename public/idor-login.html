@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Laboratório de IDOR — Login</title>
+    <link rel="stylesheet" href="/css/design-system.css">
+</head>
+<body class="ds-body">
+    <div class="ds-container-sm" style="max-width: 480px; margin: 80px auto;">
+        <div class="ds-header-gradient ds-header-gradient--idor" style="margin-bottom: var(--space-6);">
+            <h1 style="font-size: var(--text-2xl);">🔓 Laboratório de IDOR</h1>
+            <p style="font-size: var(--text-base);">Entre com o usuário da sua sala</p>
+        </div>
+
+        <div id="erro-login" class="ds-alert ds-alert--danger" style="display:none; text-align:center; margin-bottom: var(--space-5);">
+            ❌ Usuário ou senha inválidos.
+        </div>
+
+        <form action="/idor/login" method="POST" class="ds-card ds-card--idor" style="text-align: left; cursor: default;">
+            <label class="ds-label">Usuário:</label>
+            <input type="text" name="usuario" required class="ds-input" placeholder="Sala-a ou Sala-b">
+
+            <label class="ds-label">Senha:</label>
+            <input type="password" name="senha" required class="ds-input">
+
+            <button type="submit" class="ds-btn ds-btn--warning ds-btn--full">Entrar</button>
+        </form>
+
+        <div style="text-align: center; margin-top: var(--space-5);">
+            <a href="/" class="ds-link" style="color: var(--color-text-subtle); font-size: var(--text-sm);">← Voltar ao Hub</a>
+        </div>
+    </div>
+
+    <script>
+        // Mostra o aviso de erro se vier ?erro=1 na URL (definido pelo POST /idor/login quando a senha está errada)
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('erro') === '1') {
+            document.getElementById('erro-login').style.display = 'block';
+        }
+    </script>
+</body>
+</html>

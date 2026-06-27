@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Laboratório SQL Injection</title>
+    <link rel="stylesheet" href="/css/design-system.css">
+</head>
+<body class="ds-body">
+    <div class="ds-container-sm">
+        <!-- CABEÇALHO -->
+        <div class="ds-header-gradient ds-header-gradient--sqli">
+            <h1>🔬 Laboratório de Práticas</h1>
+            <p>SQL Injection - Aula Prática de Segurança</p>
+        </div>
+
+        <!-- INSTRUÇÕES -->
+        <div class="ds-alert ds-alert--sqli" style="margin-bottom: var(--space-7);">
+            <h2 style="color: var(--color-text-primary); margin-top: 0;">📚 Bem-vindo ao Laboratório!</h2>
+            <p class="ds-alert-body">
+                Este laboratório foi criado para fins educacionais, permitindo que você explore e entenda conceitos de
+                <strong>SQL Injection (SQLi)</strong> em um ambiente controlado e seguro.
+            </p>
+            <h3 style="color: var(--color-brand-muted); margin: 20px 0 10px 0;">🎯 Como Usar:</h3>
+            <ol class="ds-alert-body" style="line-height: var(--leading-loose); margin: 10px 0;">
+                <li><strong>Faça login</strong> usando um payload SQL Injection (veja exemplos abaixo)</li>
+                <li><strong>Acesse a dashboard</strong> com o menu de 10 testes diferentes</li>
+                <li><strong>Explore os ataques</strong> e veja como afetam o banco de dados</li>
+                <li><strong>Aprenda a se defender</strong> contra essas vulnerabilidades</li>
+            </ol>
+        </div>
+
+        <!-- PAYLOADS DE EXEMPLO -->
+        <div class="ds-alert ds-alert--warning" style="margin-bottom: var(--space-7);">
+            <h3 style="margin-top: 0; color: var(--color-warning-text);">💡 Payloads para Testar:</h3>
+            <p class="ds-alert-body" style="margin: 10px 0;"><strong>Login Bypass (Mais fácil):</strong></p>
+            <code class="ds-code-block" style="margin-bottom: var(--space-4);">
+                Email: <strong>' OR '1'='1</strong><br>
+                Senha: <strong>qualquer coisa</strong>
+            </code>
+
+            <p class="ds-alert-body" style="margin: 20px 0 10px 0;"><strong>Outras opções:</strong></p>
+            <code class="ds-code-block">
+                Email: <strong>' OR 1=1--</strong><br>
+                Email: <strong>admin' --</strong><br>
+                Email: <strong>' OR '1'='1' /*</strong>
+            </code>
+        </div>
+
+        <!-- FORMULÁRIO DE LOGIN -->
+        <div class="ds-card ds-card--sqli" style="text-align: left; cursor: default;">
+            <h2 style="text-align: center; color: var(--color-text-primary); margin-top: 0;">🔐 Login</h2>
+            <form action="/login" method="POST">
+                <label class="ds-label">📧 E-mail:</label>
+                <input type="text" name="email" id="campo-email" class="ds-input" placeholder="Exemplo: ' OR '1'='1" required>
+
+                <label class="ds-label">🔒 Senha:</label>
+                <input type="password" name="senha" class="ds-input" placeholder="Digite qualquer coisa" required>
+
+                <button type="submit" class="ds-btn ds-btn--primary ds-btn--full ds-btn--lg">🚀 Entrar no Laboratório</button>
+            </form>
+        </div>
+
+        <!-- RODAPÉ -->
+        <div class="ds-footer-disclaimer">
+            <p>⚠️ <strong>Aviso:</strong> Este laboratório é fornecido apenas para fins educacionais.<br>
+            Não use técnicas de SQLi em ambientes de produção sem autorização!</p>
+        </div>
+    </div>
+
+    <script>
+        // Pré-preenche o e-mail se vier ?email= na URL (usado pelo botão "Ir para o Login" do teste 1 no dashboard)
+        const params = new URLSearchParams(window.location.search);
+        const emailPrefill = params.get('email');
+        if (emailPrefill) {
+            document.getElementById('campo-email').value = emailPrefill;
+        }
+    </script>
+</body>
+</html>

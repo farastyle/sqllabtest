@@ -1,4 +1,5 @@
 require('dotenv').config(); // 1º LUGAR OBRIGATÓRIO: Carrega as variáveis do arquivo .env antes de tudo!
+const path = require('path');
 const express = require('express');
 const session = require('express-session');
 const { Pool } = require('pg');
@@ -12,6 +13,8 @@ app.use(session({
     saveUninitialized: false,
     cookie: { maxAge: 8 * 60 * 60 * 1000 } // 8 horas, dura a aula inteira
 }));
+// Serve o CSS do design system e as páginas estáticas (sem dados do banco) em public/
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Pega as peças separadas do .env (Locais)
 const dbId = process.env.DB_ID;
@@ -81,108 +84,15 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
-// 0. HUB DE SELEÇÃO DE LABORATÓRIOS
+// 0. HUB DE SELEÇÃO DE LABORATÓRIOS — página estática, ver public/hub.html
 app.get('/', (req, res) => {
-    res.send(`
-        <div style="font-family: sans-serif; max-width: 800px; margin: 60px auto; padding: 20px;">
-            <div style="text-align: center; padding: 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 8px; margin-bottom: 40px;">
-                <h1 style="margin: 0; font-size: 32px;">🔬 Laboratórios de Segurança</h1>
-                <p style="margin: 10px 0 0 0; font-size: 18px; opacity: 0.9;">Escolha o laboratório da aula de hoje</p>
-            </div>
-
-            <div style="display: flex; gap: 20px; flex-wrap: wrap;">
-                <a href="/sqli" style="flex: 1; min-width: 280px; text-decoration: none; display: block; background: white; border: 2px solid #667eea; border-radius: 8px; padding: 30px; text-align: center; color: #333; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: transform 0.2s;">
-                    <div style="font-size: 48px;">💉</div>
-                    <h2 style="margin: 10px 0 5px 0; color: #667eea;">SQL Injection</h2>
-                    <p style="color: #666; font-size: 14px;">Login bypass, UNION SELECT, blind injection e mais 10 testes práticos.</p>
-                </a>
-                <a href="/xss" style="flex: 1; min-width: 280px; text-decoration: none; display: block; background: white; border: 2px solid #28a745; border-radius: 8px; padding: 30px; text-align: center; color: #333; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: transform 0.2s;">
-                    <div style="font-size: 48px;">🧪</div>
-                    <h2 style="margin: 10px 0 5px 0; color: #28a745;">Cross-Site Scripting (XSS)</h2>
-                    <p style="color: #666; font-size: 14px;">XSS Refletido na busca e XSS Armazenado no mural de comentários.</p>
-                </a>
-                <a href="/idor" style="flex: 1; min-width: 280px; text-decoration: none; display: block; background: white; border: 2px solid #fd7e14; border-radius: 8px; padding: 30px; text-align: center; color: #333; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: transform 0.2s;">
-                    <div style="font-size: 48px;">🔓</div>
-                    <h2 style="margin: 10px 0 5px 0; color: #fd7e14;">IDOR / Controle de Acesso</h2>
-                    <p style="color: #666; font-size: 14px;">Manipulação de IDs, escalonamento de privilégio e 10 falhas de autorização.</p>
-                </a>
-            </div>
-
-            <div style="text-align: center; margin-top: 30px; color: #999; font-size: 12px;">
-                <p>⚠️ <strong>Aviso:</strong> Estes laboratórios são fornecidos apenas para fins educacionais.<br>
-                Não use estas técnicas em ambientes de produção sem autorização!</p>
-            </div>
-        </div>
-    `);
+    res.sendFile(path.join(__dirname, 'public', 'hub.html'));
 });
 
-// 1. TELA DE LOGIN (FRONT-END EMBUTIDO)
+// 1. TELA DE LOGIN — página estática, ver public/sqli-login.html
+//    (o pré-preenchimento do e-mail via ?email= agora é feito no próprio HTML, no navegador)
 app.get('/sqli', (req, res) => {
-    // Permite pré-preencher o campo de e-mail (usado pelo botão "Ir para o Login" do teste 1 no dashboard)
-    const emailPrefill = escapeHtml(req.query.email || '');
-
-    res.send(`
-        <div style="font-family: sans-serif; max-width: 800px; margin: 60px auto; padding: 20px;">
-            <!-- CABEÇALHO -->
-            <div style="text-align: center; padding: 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 8px; margin-bottom: 40px;">
-                <h1 style="margin: 0; font-size: 32px;">🔬 Laboratório de Práticas</h1>
-                <p style="margin: 10px 0 0 0; font-size: 18px; opacity: 0.9;">SQL Injection - Aula Prática de Segurança</p>
-            </div>
-
-            <!-- INSTRUÇÕES -->
-            <div style="background: #f0f8ff; border-left: 4px solid #667eea; padding: 20px; margin-bottom: 30px; border-radius: 4px;">
-                <h2 style="color: #333; margin-top: 0;">📚 Bem-vindo ao Laboratório!</h2>
-                <p style="color: #555; line-height: 1.6;">
-                    Este laboratório foi criado para fins educacionais, permitindo que você explore e entenda conceitos de
-                    <strong>SQL Injection (SQLi)</strong> em um ambiente controlado e seguro.
-                </p>
-                <h3 style="color: #667eea; margin: 20px 0 10px 0;">🎯 Como Usar:</h3>
-                <ol style="color: #555; line-height: 1.8; margin: 10px 0;">
-                    <li><strong>Faça login</strong> usando um payload SQL Injection (veja exemplos abaixo)</li>
-                    <li><strong>Acesse a dashboard</strong> com o menu de 10 testes diferentes</li>
-                    <li><strong>Explore os ataques</strong> e veja como afetam o banco de dados</li>
-                    <li><strong>Aprenda a se defender</strong> contra essas vulnerabilidades</li>
-                </ol>
-            </div>
-
-            <!-- PAYLOADS DE EXEMPLO -->
-            <div style="background: #fffbea; border-left: 4px solid #ffc107; padding: 20px; margin-bottom: 30px; border-radius: 4px;">
-                <h3 style="color: #ff9800; margin-top: 0;">💡 Payloads para Testar:</h3>
-                <p style="color: #555; margin: 10px 0;"><strong>Login Bypass (Mais fácil):</strong></p>
-                <code style="background: #fff; padding: 10px; border-radius: 4px; display: block; overflow-x: auto; border: 1px solid #ddd;">
-                    Email: <strong>' OR '1'='1</strong><br>
-                    Senha: <strong>qualquer coisa</strong>
-                </code>
-
-                <p style="color: #555; margin: 20px 0 10px 0;"><strong>Outras opções:</strong></p>
-                <code style="background: #fff; padding: 10px; border-radius: 4px; display: block; overflow-x: auto; border: 1px solid #ddd;">
-                    Email: <strong>' OR 1=1--</strong><br>
-                    Email: <strong>admin' --</strong><br>
-                    Email: <strong>' OR '1'='1' /*</strong>
-                </code>
-            </div>
-
-            <!-- FORMULÁRIO DE LOGIN -->
-            <div style="background: white; padding: 30px; border: 2px solid #667eea; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                <h2 style="text-align: center; color: #333; margin-top: 0;">🔐 Login</h2>
-                <form action="/login" method="POST">
-                    <label style="font-weight: bold; color: #333; display: block; margin-bottom: 8px;">📧 E-mail:</label>
-                    <input type="text" name="email" value="${emailPrefill}" style="width:100%; padding:12px; margin-bottom: 20px; border: 1px solid #ddd; border-radius:4px; box-sizing: border-box; font-size: 14px;" placeholder="Exemplo: ' OR '1'='1" required><br>
-
-                    <label style="font-weight: bold; color: #333; display: block; margin-bottom: 8px;">🔒 Senha:</label>
-                    <input type="password" name="senha" style="width:100%; padding:12px; margin-bottom: 20px; border: 1px solid #ddd; border-radius:4px; box-sizing: border-box; font-size: 14px;" placeholder="Digite qualquer coisa" required><br>
-
-                    <button type="submit" style="width:100%; padding:14px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color:white; border:none; border-radius:4px; font-size:16px; cursor:pointer; font-weight: bold; transition: transform 0.2s;">🚀 Entrar no Laboratório</button>
-                </form>
-            </div>
-
-            <!-- RODAPÉ -->
-            <div style="text-align: center; margin-top: 30px; color: #999; font-size: 12px;">
-                <p>⚠️ <strong>Aviso:</strong> Este laboratório é fornecido apenas para fins educacionais.<br>
-                Não use técnicas de SQLi em ambientes de produção sem autorização!</p>
-            </div>
-        </div>
-    `);
+    res.sendFile(path.join(__dirname, 'public', 'sqli-login.html'));
 });
 
 // 2. ROTA DE LOGIN VULNERÁVEL (Ataque de desvio/Bypass)
@@ -679,34 +589,9 @@ app.param('sala', (req, res, next, sala) => {
 });
 
 // 0. SELEÇÃO DE SALA (Lab 1 / Lab 2) — cada sala tem seu próprio mural, isolado uma da outra
+// SELEÇÃO DE SALA (Lab 1 / Lab 2) — página estática, ver public/xss-sala.html
 app.get('/xss', (req, res) => {
-    res.send(`
-        <div style="font-family: sans-serif; max-width: 800px; margin: 60px auto; padding: 20px;">
-            <div style="text-align: center; padding: 30px; background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%); color: white; border-radius: 8px; margin-bottom: 40px;">
-                <h1 style="margin: 0; font-size: 32px;">🧪 Laboratório de XSS</h1>
-                <p style="margin: 10px 0 0 0; font-size: 18px; opacity: 0.9;">Escolha sua sala de testes</p>
-            </div>
-
-            <p style="text-align:center; color:#666; margin-bottom: 30px;">Cada sala tem seu próprio Mural de Recados. O que você postar no Lab 1 <strong>não aparece</strong> no Lab 2, e vice-versa.</p>
-
-            <div style="display: flex; gap: 20px; flex-wrap: wrap;">
-                <a href="/xss/1" style="flex: 1; min-width: 240px; text-decoration: none; display: block; background: white; border: 2px solid #28a745; border-radius: 8px; padding: 30px; text-align: center; color: #333; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                    <div style="font-size: 48px;">1️⃣</div>
-                    <h2 style="margin: 10px 0 5px 0; color: #28a745;">Lab 1</h2>
-                    <p style="color: #666; font-size: 14px;">Sala isolada de testes de XSS</p>
-                </a>
-                <a href="/xss/2" style="flex: 1; min-width: 240px; text-decoration: none; display: block; background: white; border: 2px solid #28a745; border-radius: 8px; padding: 30px; text-align: center; color: #333; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                    <div style="font-size: 48px;">2️⃣</div>
-                    <h2 style="margin: 10px 0 5px 0; color: #28a745;">Lab 2</h2>
-                    <p style="color: #666; font-size: 14px;">Sala isolada de testes de XSS</p>
-                </a>
-            </div>
-
-            <div style="text-align: center; margin-top: 30px;">
-                <a href="/" style="color:#999; text-decoration:none; font-size:13px;">← Voltar ao Hub</a>
-            </div>
-        </div>
-    `);
+    res.sendFile(path.join(__dirname, 'public', 'xss-sala.html'));
 });
 
 // 1. DASHBOARD DO LAB DE XSS (menu lateral com os 10 testes + acesso às 2 rotas vulneráveis, isolado por sala)
@@ -1316,33 +1201,11 @@ const CREDENCIAIS_IDOR = {
     'sala-b': { senha: 'sala-b', sala: '2', nomeExibicao: 'Sala B' }
 };
 
-// 0. LOGIN DA SALA — substitui a seleção livre de sala por usuário/senha por turma
+// 0. LOGIN DA SALA — página estática, ver public/idor-login.html
+//    (substitui a seleção livre de sala por usuário/senha por turma; o aviso de erro via
+//    ?erro=1 agora é mostrado por um pequeno script no próprio HTML, no navegador)
 app.get('/idor', (req, res) => {
-    const erro = req.query.erro === '1';
-    res.send(`
-        <div style="font-family: sans-serif; max-width: 480px; margin: 80px auto; padding: 20px;">
-            <div style="text-align: center; padding: 30px; background: linear-gradient(135deg, #fd7e14 0%, #c1590a 100%); color: white; border-radius: 8px; margin-bottom: 30px;">
-                <h1 style="margin: 0; font-size: 28px;">🔓 Laboratório de IDOR</h1>
-                <p style="margin: 10px 0 0 0; font-size: 16px; opacity: 0.9;">Entre com o usuário da sua sala</p>
-            </div>
-
-            ${erro ? '<div style="background:#f8d7da; color:#721c24; padding:12px; border-radius:4px; margin-bottom:20px; text-align:center;">❌ Usuário ou senha inválidos.</div>' : ''}
-
-            <form action="/idor/login" method="POST" style="background:white; border:2px solid #fd7e14; border-radius:8px; padding:25px;">
-                <label style="font-weight:bold; display:block; margin-bottom:6px;">Usuário:</label>
-                <input type="text" name="usuario" required style="width:100%; padding:10px; margin-bottom:16px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box;" placeholder="Sala-a ou Sala-b">
-
-                <label style="font-weight:bold; display:block; margin-bottom:6px;">Senha:</label>
-                <input type="password" name="senha" required style="width:100%; padding:10px; margin-bottom:16px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box;">
-
-                <button type="submit" style="width:100%; padding:12px; background:#fd7e14; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Entrar</button>
-            </form>
-
-            <div style="text-align: center; margin-top: 20px;">
-                <a href="/" style="color:#999; text-decoration:none; font-size:13px;">← Voltar ao Hub</a>
-            </div>
-        </div>
-    `);
+    res.sendFile(path.join(__dirname, 'public', 'idor-login.html'));
 });
 
 app.post('/idor/login', (req, res) => {

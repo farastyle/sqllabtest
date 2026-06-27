@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Laboratórios de Segurança</title>
+    <link rel="stylesheet" href="/css/design-system.css">
+</head>
+<body class="ds-body">
+    <div class="ds-container-sm">
+        <div class="ds-header-gradient ds-header-gradient--brand">
+            <h1>🔬 Laboratórios de Segurança</h1>
+            <p>Escolha o laboratório da aula de hoje</p>
+        </div>
+
+        <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+            <a href="/sqli" class="ds-card ds-card--sqli" style="flex: 1; min-width: 280px;">
+                <div class="ds-card-icon">💉</div>
+                <h2 style="color: var(--color-brand-muted);">SQL Injection</h2>
+                <p>Login bypass, UNION SELECT, blind injection e mais 10 testes práticos.</p>
+            </a>
+            <a href="/xss" class="ds-card ds-card--xss" style="flex: 1; min-width: 280px;">
+                <div class="ds-card-icon">🧪</div>
+                <h2 style="color: var(--color-xss-muted);">Cross-Site Scripting (XSS)</h2>
+                <p>XSS Refletido na busca e XSS Armazenado no mural de comentários.</p>
+            </a>
+            <a href="/idor" class="ds-card ds-card--idor" style="flex: 1; min-width: 280px;">
+                <div class="ds-card-icon">🔓</div>
+                <h2 style="color: var(--color-idor-muted);">IDOR / Controle de Acesso</h2>
+                <p>Manipulação de IDs, escalonamento de privilégio e 10 falhas de autorização.</p>
+            </a>
+        </div>
+
+        <div class="ds-footer-disclaimer">
+            <p>⚠️ <strong>Aviso:</strong> Estes laboratórios são fornecidos apenas para fins educacionais.<br>
+            Não use estas técnicas em ambientes de produção sem autorização!</p>
+        </div>
+    </div>
+</body>
+</html>
