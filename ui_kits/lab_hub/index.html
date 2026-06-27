@@ -1,0 +1,214 @@
+<!-- @dsCard group="Lab Hub" viewport="1000x860" name="Hub — Trilha de Aprendizado" subtitle="Learning trail — 8 labs, locked/available, Lucide icons" -->
+<!-- @startingPoint section="Screens" subtitle="Trilha de aprendizado — 8 aulas, labs bloqueados + disponíveis" viewport="1000x860" -->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Curso de Testes de Segurança</title>
+  <link rel="stylesheet" href="../../styles.css">
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <style>* { box-sizing: border-box; margin: 0; padding: 0; }</style>
+</head>
+<body style="background:#F1F5F9; font-family:'IBM Plex Sans',system-ui,sans-serif;">
+<div id="root"></div>
+<script type="text/babel">
+
+/* ── Inline SVG icon set (Lucide paths) ── */
+const Ico = ({ size=18, color='currentColor', sw=1.75, children }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24"
+       fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
+    {children}
+  </svg>
+);
+const ShieldIcon    = p => <Ico {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></Ico>;
+const DatabaseIcon  = p => <Ico {...p}><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></Ico>;
+const CodeIcon      = p => <Ico {...p}><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></Ico>;
+const UnlockIcon    = p => <Ico {...p}><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></Ico>;
+const SettingsIcon  = p => <Ico {...p}><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></Ico>;
+const NetworkIcon   = p => <Ico {...p}><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></Ico>;
+const CrosshairIcon = p => <Ico {...p}><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></Ico>;
+const ServerIcon    = p => <Ico {...p}><rect width="20" height="8" x="2" y="2" rx="2"/><rect width="20" height="8" x="2" y="14" rx="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></Ico>;
+const KeyIcon       = p => <Ico {...p}><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></Ico>;
+const LockIcon      = p => <Ico {...p}><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></Ico>;
+const ArrowIcon     = p => <Ico {...p}><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></Ico>;
+
+const ICON_MAP = { database: DatabaseIcon, code: CodeIcon, unlock: UnlockIcon, settings: SettingsIcon, network: NetworkIcon, crosshair: CrosshairIcon, server: ServerIcon, key: KeyIcon };
+
+/* ── Course data ── */
+const WEEKS = [
+  {
+    label: 'Semana 1–2', theme: 'Labs Práticos de Vulnerabilidades Web',
+    cols: 3,
+    labs: [
+      { id: 'sqli', aula: '1–8',   title: 'SQL Injection',              icon: 'database', color: '#4F66D4', bg: 'rgba(79,102,212,0.10)',  href: '../lab_sqli/login.html', available: true,
+        desc: 'Login bypass, UNION SELECT, blind injection e mais 10 testes práticos com PostgreSQL real.' },
+      { id: 'xss',  aula: '9–11',  title: 'Cross-Site Scripting (XSS)', icon: 'code',     color: '#2D8F52', bg: 'rgba(45,143,82,0.10)',   href: '../lab_xss/index.html',  available: true,
+        desc: 'XSS refletido na busca de produtos e XSS armazenado no mural de comentários, isolado por sala.' },
+      { id: 'idor', aula: '12–14', title: 'IDOR / Controle de Acesso',  icon: 'unlock',   color: '#C97428', bg: 'rgba(201,116,40,0.10)',  href: '../lab_idor/index.html', available: true,
+        desc: 'Manipulação de IDs previsíveis, escalonamento de privilégio e 10 falhas de autorização.' },
+    ]
+  },
+  {
+    label: 'Semana 3', theme: 'OWASP e Vulnerabilidades Comuns',
+    cols: 1,
+    labs: [
+      { id: 'misconfig', aula: 15, title: 'Misconfiguration + Dados Sensíveis', icon: 'settings', color: '#94A3B8', bg: '#F1F5F9', href: '#', available: false, when: 'Semana 3',
+        desc: 'Identificar configurações incorretas e exposição de dados sensíveis em aplicações web modernas.' },
+    ]
+  },
+  {
+    label: 'Semana 4', theme: 'Threat Modeling + APIs',
+    cols: 4,
+    labs: [
+      { id: 'stride',   aula: 16, title: 'Threat Modeling — STRIDE', icon: 'network',    color: '#94A3B8', bg: '#F1F5F9', href: '#', available: false, when: 'Semana 4',
+        desc: 'Mapear ameaças e riscos em aplicações com o framework STRIDE.' },
+      { id: 'surface',  aula: 17, title: 'Superfície de Ataque',      icon: 'crosshair',  color: '#94A3B8', bg: '#F1F5F9', href: '#', available: false, when: 'Semana 4',
+        desc: 'Identificar e reduzir a superfície de ataque em sistemas e APIs.' },
+      { id: 'api-sec',  aula: 18, title: 'Segurança em APIs',         icon: 'server',     color: '#94A3B8', bg: '#F1F5F9', href: '#', available: false, when: 'Semana 4',
+        desc: 'Vulnerabilidades comuns em APIs REST e GraphQL.' },
+      { id: 'api-auth', aula: 19, title: 'Autenticação — Tokens',     icon: 'key',        color: '#94A3B8', bg: '#F1F5F9', href: '#', available: false, when: 'Semana 4',
+        desc: 'JWT, OAuth e falhas em autenticação baseada em tokens.' },
+    ]
+  },
+];
+
+const totalLabs     = WEEKS.reduce((n, w) => n + w.labs.length, 0);
+const availableLabs = WEEKS.reduce((n, w) => n + w.labs.filter(l => l.available).length, 0);
+
+/* ── LabCard ── */
+function LabCard({ lab }) {
+  const [hov, setHov] = React.useState(false);
+  const IconComp = ICON_MAP[lab.icon];
+
+  if (!lab.available) {
+    return (
+      <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 10, padding: '20px 18px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+          <div style={{ width: 36, height: 36, background: '#F1F5F9', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <LockIcon size={16} color="#94A3B8" />
+          </div>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#F1F5F9', color: '#94A3B8', fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 999 }}>
+            <LockIcon size={10} color="#94A3B8" sw={2.5} /> Aula {lab.aula}{lab.when ? ' · ' + lab.when : ''}
+          </span>
+        </div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#94A3B8', marginBottom: 6, lineHeight: 1.35 }}>{lab.title}</div>
+        <div style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.6 }}>{lab.desc}</div>
+        {lab.when && <div style={{ display:'flex', alignItems:'center', gap:5, fontSize:11, color:'#CBD5E1', marginTop:8 }}><span style={{ width:5, height:5, background:'#CBD5E1', borderRadius:'50%', display:'inline-block' }}></span>17h às 18h · Em desenvolvimento</div>}
+      </div>
+    );
+  }
+
+  return (
+    <a href={lab.href}
+       onMouseEnter={() => setHov(true)}
+       onMouseLeave={() => setHov(false)}
+       style={{
+         display: 'block', textDecoration: 'none',
+         background: '#fff',
+         borderTop: '1px solid #E2E8F0', borderRight: '1px solid #E2E8F0', borderBottom: '1px solid #E2E8F0',
+         borderLeft: `4px solid ${lab.color}`,
+         borderRadius: '0 10px 10px 0',
+         padding: '20px 18px',
+         boxShadow: hov ? '0 6px 20px rgba(0,0,0,0.08)' : '0 1px 4px rgba(0,0,0,0.05)',
+         transform: hov ? 'translateY(-2px)' : 'none',
+         transition: 'box-shadow 0.15s, transform 0.15s',
+         cursor: 'pointer',
+       }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+        <div style={{ width: 36, height: 36, background: lab.bg, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {IconComp && <IconComp size={18} color={lab.color} />}
+        </div>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#DCFCE7', color: '#15803D', fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 999 }}>
+          <span style={{ width: 6, height: 6, background: '#22C55E', borderRadius: '50%', display: 'inline-block' }}></span>
+          Disponível
+        </span>
+      </div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A', marginBottom: 6, lineHeight: 1.35 }}>{lab.title}</div>
+      <div style={{ fontSize: 12, color: '#64748B', lineHeight: 1.6, marginBottom: 14 }}>{lab.desc}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: lab.color }}>
+        Acessar laboratório <ArrowIcon size={13} color={lab.color} sw={2.5} />
+      </div>
+    </a>
+  );
+}
+
+/* ── WeekSection ── */
+function WeekSection({ week }) {
+  const gridCols = week.cols === 1
+    ? 'repeat(1, minmax(0, 360px))'
+    : `repeat(${week.cols}, 1fr)`;
+  return (
+    <section style={{ marginBottom: 36 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', letterSpacing: '0.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+          {week.label}
+        </span>
+        <div style={{ flex: 1, height: 1, background: '#E2E8F0' }}></div>
+        <span style={{ fontSize: 11, color: '#94A3B8', whiteSpace: 'nowrap' }}>{week.theme}</span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 16 }}>
+        {week.labs.map(lab => <LabCard key={lab.id} lab={lab} />)}
+      </div>
+    </section>
+  );
+}
+
+/* ── Hub ── */
+function Hub() {
+  const pct = Math.round((availableLabs / totalLabs) * 100);
+  return (
+    <div style={{ minHeight: '100vh' }}>
+      {/* Header */}
+      <header style={{ background: '#fff', borderBottom: '1px solid #E2E8F0', padding: '14px 40px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <ShieldIcon size={26} color="#4F66D4" sw={2} />
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: '#0F172A', lineHeight: 1.2 }}>Curso de Testes de Segurança</div>
+            <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 1 }}>Laboratórios Práticos · Semanas 1–4</div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 12, color: '#64748B', fontWeight: 500 }}>{availableLabs} de {totalLabs} labs disponíveis</span>
+          <div style={{ width: 80, height: 6, background: '#E2E8F0', borderRadius: 999, overflow: 'hidden' }}>
+            <div style={{ width: pct + '%', height: '100%', background: '#4F66D4', borderRadius: 999, transition: 'width 0.6s ease' }}></div>
+          </div>
+        </div>
+      </header>
+
+      {/* Course banner */}
+      <div style={{ background: 'linear-gradient(135deg, #3B55C8 0%, #5B3FA6 100%)', padding: '28px 40px', color: '#fff' }}>
+        <div style={{ maxWidth: 960, margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.2, marginBottom: 6 }}>Trilha de Aprendizado</div>
+            <div style={{ fontSize: 13, opacity: 0.8, lineHeight: 1.5 }}>Vulnerabilidades Web · Threat Modeling · Segurança em APIs</div>
+          </div>
+          <div style={{ display: 'flex', gap: 24 }}>
+            {[['8', 'labs'], ['4', 'semanas'], ['19', 'aulas']].map(([n, l]) => (
+              <div key={l} style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 24, fontWeight: 700, lineHeight: 1 }}>{n}</div>
+                <div style={{ fontSize: 11, opacity: 0.7, marginTop: 3, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{l}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Trail */}
+      <main style={{ maxWidth: 960, margin: '0 auto', padding: '32px 20px 52px' }}>
+        {WEEKS.map(w => <WeekSection key={w.label} week={w} />)}
+      </main>
+
+      {/* Footer */}
+      <div style={{ borderTop: '1px solid #E2E8F0', background: '#fff', padding: '16px 40px', textAlign: 'center', fontSize: 11, color: '#94A3B8' }}>
+        Este laboratório é fornecido apenas para fins educacionais. Não utilize estas técnicas em ambientes de produção sem autorização explícita.
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<Hub />);
+</script>
+</body>
+</html>

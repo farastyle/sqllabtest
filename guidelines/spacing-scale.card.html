@@ -1,0 +1,28 @@
+<!-- @dsCard group="Spacing" viewport="700x200" name="Scale" subtitle="Space tokens — 4px to 60px (8px base unit)" -->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="../styles.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--color-bg); padding: 14px 20px; font-family: var(--font-sans, sans-serif); }
+    .row { display: flex; align-items: center; gap: 10px; margin-bottom: 5px; }
+    .bar { height: 14px; background: var(--color-brand); border-radius: 2px; flex-shrink: 0; }
+    .token { font-size: 10px; color: var(--color-text-subtle); font-family: var(--font-mono); width: 100px; }
+    .val { font-size: 10px; color: var(--color-text-muted); }
+  </style>
+</head>
+<body>
+  <div class="row"><div class="bar" style="width:var(--space-1);"></div><div class="token">--space-1</div><div class="val">4px</div></div>
+  <div class="row"><div class="bar" style="width:var(--space-2);"></div><div class="token">--space-2</div><div class="val">8px</div></div>
+  <div class="row"><div class="bar" style="width:var(--space-3);"></div><div class="token">--space-3</div><div class="val">12px</div></div>
+  <div class="row"><div class="bar" style="width:var(--space-4);"></div><div class="token">--space-4</div><div class="val">16px</div></div>
+  <div class="row"><div class="bar" style="width:var(--space-5);"></div><div class="token">--space-5</div><div class="val">20px</div></div>
+  <div class="row"><div class="bar" style="width:var(--space-6);"></div><div class="token">--space-6</div><div class="val">24px</div></div>
+  <div class="row"><div class="bar" style="width:var(--space-7);"></div><div class="token">--space-7</div><div class="val">30px</div></div>
+  <div class="row"><div class="bar" style="width:var(--space-8);"></div><div class="token">--space-8</div><div class="val">36px</div></div>
+  <div class="row"><div class="bar" style="width:var(--space-9);"></div><div class="token">--space-9</div><div class="val">48px</div></div>
+  <div class="row"><div class="bar" style="width:var(--space-10);"></div><div class="token">--space-10</div><div class="val">60px</div></div>
+</body>
+</html>

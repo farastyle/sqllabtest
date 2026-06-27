@@ -1,0 +1,6 @@
+:root {
+  --shadow-card:       0 4px 6px rgba(0, 0, 0, 0.10);
+  --shadow-card-hover: 0 6px 12px rgba(0, 0, 0, 0.15);
+  --shadow-subtle:     0 2px 4px rgba(0, 0, 0, 0.05);
+  --shadow-elevated:   0 8px 24px rgba(0, 0, 0, 0.12);
+}

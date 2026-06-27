@@ -1,0 +1,36 @@
+<!-- @dsCard group="Brand" viewport="700x260" name="Info Panels" subtitle="Left-border 4px accent — the core instructional UI pattern" -->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="../styles.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--color-bg); padding: 14px; font-family: var(--font-sans, sans-serif); }
+    .panels { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .panel { border-radius: var(--radius-sm); padding: 10px 12px; }
+    .panel-title { font-size: var(--text-sm); font-weight: var(--font-bold); margin-bottom: 4px; }
+    .panel-body { font-size: var(--text-xs); line-height: var(--leading-relaxed); color: var(--color-text-secondary); }
+  </style>
+</head>
+<body>
+  <div class="panels">
+    <div class="panel" style="border-left: 4px solid var(--color-brand); background: var(--color-sqli-surface);">
+      <div class="panel-title" style="color: var(--color-brand);">📚 sqli — Instruções</div>
+      <div class="panel-body">Faça login com um payload SQL Injection e acesse a dashboard com os 10 testes.</div>
+    </div>
+    <div class="panel" style="border-left: 4px solid var(--color-warning); background: var(--color-warning-surface);">
+      <div class="panel-title" style="color: var(--color-warning-text);">⚠️ warning — Atenção</div>
+      <div class="panel-body">Este teste altera os dados do banco para todos os alunos. Resetar após testar.</div>
+    </div>
+    <div class="panel" style="border-left: 4px solid var(--color-danger); background: var(--color-danger-surface);">
+      <div class="panel-title" style="color: var(--color-danger-text);">💥 danger — Erro SQL</div>
+      <div class="panel-body">Mensagem do Postgres: syntax error at or near "UNION" — o payload funcionou!</div>
+    </div>
+    <div class="panel" style="border-left: 4px solid var(--color-info); background: var(--color-info-surface);">
+      <div class="panel-title" style="color: var(--color-info-text);">💡 info — Dica</div>
+      <div class="panel-body">Cole o payload no campo de busca ao lado e clique em "Buscar".</div>
+    </div>
+  </div>
+</body>
+</html>

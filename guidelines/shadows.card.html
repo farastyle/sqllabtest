@@ -1,0 +1,40 @@
+<!-- @dsCard group="Brand" viewport="700x140" name="Shadows" subtitle="Four elevation levels used across the product" -->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="../styles.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--color-bg-secondary); padding: 20px; font-family: var(--font-sans, sans-serif); }
+    .row { display: flex; gap: 20px; align-items: flex-end; }
+    .card { background: var(--color-white); border-radius: var(--radius-sm); padding: 14px 18px; display: flex; flex-direction: column; align-items: center; gap: 8px; flex: 1; }
+    .token { font-size: 10px; color: var(--color-text-muted); font-family: var(--font-mono); text-align: center; }
+    .usage { font-size: 10px; color: var(--color-text-subtle); text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="row">
+    <div class="card" style="box-shadow: none; border: 1px solid var(--color-border);">
+      <div class="token">none</div>
+      <div class="usage">Tables, sidebar items</div>
+    </div>
+    <div class="card" style="box-shadow: var(--shadow-subtle);">
+      <div class="token">--shadow-subtle</div>
+      <div class="usage">Table container</div>
+    </div>
+    <div class="card" style="box-shadow: var(--shadow-card);">
+      <div class="token">--shadow-card</div>
+      <div class="usage">Lab cards, forms</div>
+    </div>
+    <div class="card" style="box-shadow: var(--shadow-card-hover);">
+      <div class="token">--shadow-card-hover</div>
+      <div class="usage">Card hover state</div>
+    </div>
+    <div class="card" style="box-shadow: var(--shadow-elevated);">
+      <div class="token">--shadow-elevated</div>
+      <div class="usage">Modals, overlays</div>
+    </div>
+  </div>
+</body>
+</html>

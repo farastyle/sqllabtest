@@ -1,0 +1,252 @@
+<!-- @dsCard group="IDOR Lab" viewport="1100x700" name="IDOR Dashboard" subtitle="10 access-control tests — resource viewer" -->
+<!-- @startingPoint section="Screens" subtitle="IDOR lab — broken access control vulnerability testing" viewport="1100x700" -->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>IDOR — Laboratório de Controle de Acesso</title>
+  <link rel="stylesheet" href="../../styles.css">
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <style>* { box-sizing: border-box; margin: 0; padding: 0; } body { height:100vh; overflow:hidden; }</style>
+</head>
+<body style="font-family:'IBM Plex Sans',system-ui,sans-serif;">
+<div id="root" style="height:100vh;display:flex;flex-direction:column;"></div>
+<script type="text/babel">
+const ACC='#C97428';
+const IP={
+  'alert-triangle':`<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>`,
+  'arrow-left':`<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>`,
+  'check-circle':`<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>`,
+  'code-2':`<path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/>`,
+  edit:`<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>`,
+  'file-text':`<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><line x1="10" x2="8" y1="9" y2="9"/>`,
+  lock:`<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>`,
+  'message-square':`<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>`,
+  package:`<path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>`,
+  settings:`<path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/>`,
+  shield:`<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>`,
+  unlock:`<rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/>`,
+  user:`<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>`,
+  users:`<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>`,
+};
+function Ic({n,s=18,c='currentColor',w=1.75}) {
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round">${IP[n]||''}</svg>`;
+  return <img src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`} width={s} height={s} alt="" style={{display:'inline-block',flexShrink:0,verticalAlign:'middle'}} />;
+}
+
+const TESTS=[
+  {id:1,icon:'file-text',name:'Comprovante por Número',       url:'/comprovante/1002',              desc:'Troque /1001 por /1002 e acesse o comprovante de Marina.',
+   view:{tipo:'comprovante',numero:'#1002',para:'Marina Silva',cargo:'Gerente Financeira',valor:'R$ 4.750,00',ref:'Pagamento de comissão sobre vendas do trimestre'}},
+  {id:2,icon:'user',     name:'Perfil de Outro Usuário',      url:'/perfil/2',                      desc:'Seu perfil é /perfil/1. Troque para ver dados pessoais de Marina.',
+   view:{tipo:'perfil',numero:2,nome:'Marina Silva',cargo:'Gerente Financeira',salario:'R$ 12.300,00',cpf:'111.222.333-44',email:'marina.silva@empresa-lab.com',tel:'(11) 98877-6655',token:'TKN-MS-20045'}},
+  {id:3,icon:'edit',     name:'Editar Perfil Alheio',         url:'/perfil/2/editar',               desc:'Sem verificação de propriedade — qualquer usuário pode editar perfis.',
+   view:{tipo:'editar',nome:'Marina Silva',email:'marina.silva@empresa-lab.com',cargo:'Gerente Financeira'}},
+  {id:4,icon:'users',    name:'Lista Admin de Usuários',      url:'/admin/usuarios',                desc:'Rota administrativa sem verificação de papel. Expõe todos os dados.',
+   view:{tipo:'admin',usuarios:[
+     {nome:'Marina Silva',  cargo:'Gerente Financeira',  salario:'R$ 12.300,00',cpf:'111.222.333-44'},
+     {nome:'Carlos Mendes', cargo:'Diretor de TI',       salario:'R$ 18.750,00',cpf:'123.456.789-00'},
+     {nome:'Beatriz Souza', cargo:'Analista de Compras', salario:'R$ 5.200,00', cpf:'222.333.444-55'},
+     {nome:'Roberto Alves', cargo:'Sócio-Diretor',       salario:'R$ 42.000,00',cpf:'333.444.555-66'},
+   ]}},
+  {id:5,icon:'user',     name:'Conta por Parâmetro',          url:'/conta?usuario_id=5',            desc:'Query param usuario_id não validado. Veja a conta de Roberto.',
+   view:{tipo:'conta',nome:'Roberto Alves',cargo:'Sócio-Diretor',email:'roberto.alves@empresa-lab.com',salario:'R$ 42.000,00',token:'TKN-RA-40087'}},
+  {id:6,icon:'lock',     name:'Escalonamento de Privilégio',  url:'/conta/editar',                  desc:'Campo "perfil" pode ser alterado de "aluno" para "admin" sem restrição.',
+   view:{tipo:'privilegio'}},
+  {id:7,icon:'code-2',   name:'API Perfil — JSON Sensível',   url:'/api/perfil/3',                  desc:'API expõe CPF, salário e token sem autenticação.',
+   view:{tipo:'api',json:'{\n  "numero": 3,\n  "nome": "Carlos Mendes",\n  "cargo": "Diretor de TI",\n  "salario": 18750.00,\n  "cpf": "123.456.789-00",\n  "token": "TKN-CM-58231",\n  "papel": "aluno"\n}'}},
+  {id:8,icon:'file-text',name:'Fatura por Código Base64',     url:'/fatura/NjAwMg==',               desc:'ID 6002 codificado em Base64. Ofuscação não é segurança.',
+   view:{tipo:'fatura',codigo:'NjAwMg== (= 6002)',para:'Beatriz Souza',cargo:'Analista de Compras',valor:'R$ 899,90',ref:'Assinatura Anual Premium'}},
+  {id:9,icon:'message-square',name:'Chamado de Suporte Alheio',url:'/chamado/4002',               desc:'Lê e exclui o chamado de suporte de outro usuário.',
+   view:{tipo:'chamado',numero:4002,de:'Marina Silva',assunto:'Esqueci minha senha de administrador, me ajudem urgente',msg:'Pessoal, preciso redefinir a senha mestre do sistema financeiro hoje ainda, é urgente.'}},
+  {id:10,icon:'package', name:'Pedidos por Parâmetro',        url:'/pedidos?usuario_numero=5',      desc:'Query param usuario_numero não verificado. Veja os pedidos de Roberto.',
+   view:{tipo:'pedidos',nome:'Roberto Alves',pedidos:[{item:'Backup Completo do Banco de Dados Pessoal',valor:'R$ 1.200,00'}]}},
+];
+
+function DangerBanner({url}) {
+  return (
+    <div style={{ background:'#FEF2F2', border:'1px solid #FECACA', borderRadius:8, padding:'10px 14px', marginBottom:16, display:'flex', alignItems:'center', gap:10 }}>
+      <Ic n="alert-triangle" s={18} c="#DC2626" />
+      <div>
+        <div style={{ fontSize:12, fontWeight:700, color:'#DC2626' }}>Acesso indevido simulado</div>
+        <div style={{ fontSize:11, color:'#B91C1C', fontFamily:"'IBM Plex Mono',monospace", marginTop:2 }}>GET {url}</div>
+      </div>
+    </div>
+  );
+}
+
+function Row({label,value,highlight=false}) {
+  return <div style={{ display:'flex', gap:8, padding:'8px 0', borderBottom:'1px solid #F1F5F9' }}>
+    <span style={{ fontSize:12, color:'#94A3B8', width:100, flexShrink:0 }}>{label}</span>
+    <span style={{ fontSize:12, fontWeight: highlight?700:500, color: highlight?'#DC2626':'#1E293B', fontFamily: highlight?"'IBM Plex Mono',monospace":'inherit' }}>{value}</span>
+  </div>;
+}
+
+function ResourceView({test}) {
+  if (!test) return (
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100%', color:'#94A3B8', gap:12 }}>
+      <Ic n="unlock" s={40} c="#E2E8F0" w={1.5} />
+      <div style={{ fontSize:14, fontWeight:600, color:'#CBD5E1' }}>Selecione um teste na barra lateral</div>
+      <div style={{ fontSize:12, color:'#E2E8F0', maxWidth:320, textAlign:'center', lineHeight:1.6 }}>Cada teste demonstra uma falha de controle de acesso diferente. Você verá o recurso que não deveria ser acessível.</div>
+    </div>
+  );
+  const v=test.view;
+  return (
+    <div style={{ maxWidth:560 }}>
+      <DangerBanner url={test.url} />
+      {v.tipo==='comprovante' && <div style={{ background:'#fff', border:'1px solid #E2E8F0', borderRadius:10, padding:20 }}>
+        <div style={{ fontSize:13, fontWeight:700, color:'#334155', marginBottom:12 }}>Comprovante de Pagamento {v.numero}</div>
+        <Row label="Beneficiário" value={v.para} />
+        <Row label="Cargo" value={v.cargo} />
+        <Row label="Tipo" value={v.ref} />
+        <Row label="Valor" value={v.valor} highlight />
+      </div>}
+      {v.tipo==='perfil' && <div style={{ background:'#fff', border:'1px solid #E2E8F0', borderRadius:10, padding:20 }}>
+        <div style={{ fontSize:13, fontWeight:700, color:'#334155', marginBottom:12 }}>Perfil #{v.numero} — {v.nome}</div>
+        <Row label="Cargo" value={v.cargo} />
+        <Row label="Salário" value={v.salario} highlight />
+        <Row label="CPF" value={v.cpf} highlight />
+        <Row label="E-mail" value={v.email} />
+        <Row label="Telefone" value={v.tel} />
+        <Row label="Token" value={v.token} highlight />
+      </div>}
+      {v.tipo==='editar' && <div style={{ background:'#fff', border:'1px solid #E2E8F0', borderRadius:10, padding:20 }}>
+        <div style={{ fontSize:13, fontWeight:700, color:'#334155', marginBottom:12 }}>Editar Perfil — {v.nome}</div>
+        {[['Nome',v.nome],['E-mail',v.email],['Cargo',v.cargo]].map(([l,val])=>(
+          <div key={l} style={{ marginBottom:10 }}>
+            <label style={{ fontSize:11, color:'#64748B', display:'block', marginBottom:4 }}>{l}</label>
+            <input defaultValue={val} style={{ width:'100%', padding:'8px 10px', border:'1px solid #E2E8F0', borderRadius:6, fontSize:12, fontFamily:'inherit', background:'#FFFBEB' }} />
+          </div>
+        ))}
+        <div style={{ fontSize:11, color:'#DC2626', marginTop:8 }}>Sem verificação de propriedade — você pode salvar aqui mesmo sem ser esta pessoa.</div>
+      </div>}
+      {v.tipo==='admin' && <div>
+        <div style={{ fontSize:13, fontWeight:700, color:'#334155', marginBottom:10 }}>Todos os Usuários (requer admin — não verificado)</div>
+        <table style={{ width:'100%', borderCollapse:'collapse', background:'#fff', border:'1px solid #E2E8F0', borderRadius:10, overflow:'hidden' }}>
+          <thead><tr style={{ background:'#F8FAFC' }}>
+            {['Nome','Cargo','Salário','CPF'].map(h=><th key={h} style={{ padding:'8px 12px', textAlign:'left', fontSize:11, fontWeight:600, color:'#64748B' }}>{h}</th>)}
+          </tr></thead>
+          <tbody>
+            {v.usuarios.map((u,i)=><tr key={i} style={{ borderTop:'1px solid #F1F5F9' }}>
+              <td style={{ padding:'8px 12px', fontSize:12, color:'#1E293B' }}>{u.nome}</td>
+              <td style={{ padding:'8px 12px', fontSize:12, color:'#64748B' }}>{u.cargo}</td>
+              <td style={{ padding:'8px 12px', fontSize:12, fontWeight:700, color:'#DC2626', fontFamily:"'IBM Plex Mono',monospace" }}>{u.salario}</td>
+              <td style={{ padding:'8px 12px', fontSize:12, fontWeight:600, color:'#DC2626', fontFamily:"'IBM Plex Mono',monospace" }}>{u.cpf}</td>
+            </tr>)}
+          </tbody>
+        </table>
+      </div>}
+      {v.tipo==='conta' && <div style={{ background:'#fff', border:'1px solid #E2E8F0', borderRadius:10, padding:20 }}>
+        <div style={{ fontSize:13, fontWeight:700, color:'#334155', marginBottom:12 }}>Conta de {v.nome}</div>
+        <Row label="Cargo" value={v.cargo} />
+        <Row label="E-mail" value={v.email} />
+        <Row label="Salário" value={v.salario} highlight />
+        <Row label="Token" value={v.token} highlight />
+      </div>}
+      {v.tipo==='privilegio' && <div style={{ background:'#fff', border:'1px solid #E2E8F0', borderRadius:10, padding:20 }}>
+        <div style={{ fontSize:13, fontWeight:700, color:'#334155', marginBottom:12 }}>Editar Minha Conta — Escalonamento</div>
+        <div style={{ marginBottom:10 }}>
+          <label style={{ fontSize:11, color:'#64748B', display:'block', marginBottom:4 }}>E-mail</label>
+          <input defaultValue="aluno@lab.com" style={{ width:'100%', padding:'8px 10px', border:'1px solid #E2E8F0', borderRadius:6, fontSize:12, fontFamily:'inherit' }} />
+        </div>
+        <div style={{ marginBottom:10 }}>
+          <label style={{ fontSize:11, color:'#64748B', display:'block', marginBottom:4 }}>Perfil (papel no sistema)</label>
+          <input defaultValue="aluno" style={{ width:'100%', padding:'8px 10px', border:'1.5px solid #FCA5A5', borderRadius:6, fontSize:12, fontFamily:"'IBM Plex Mono',monospace", background:'#FEF2F2', color:'#DC2626' }} />
+        </div>
+        <div style={{ fontSize:11, color:'#DC2626', lineHeight:1.5 }}>Altere "aluno" para "admin" e salve — sem validação server-side, o papel é atualizado.</div>
+      </div>}
+      {v.tipo==='api' && <div>
+        <div style={{ fontSize:13, fontWeight:700, color:'#334155', marginBottom:10 }}>Resposta JSON — sem autenticação</div>
+        <pre style={{ background:'#1E293B', color:'#E2E8F0', padding:16, borderRadius:10, fontSize:12, fontFamily:"'IBM Plex Mono',monospace", lineHeight:1.7, overflow:'auto' }}>{v.json}</pre>
+        <div style={{ fontSize:11, color:'#DC2626', marginTop:8 }}>CPF, salário e token expostos publicamente via API sem qualquer token de autenticação.</div>
+      </div>}
+      {v.tipo==='fatura' && <div style={{ background:'#fff', border:'1px solid #E2E8F0', borderRadius:10, padding:20 }}>
+        <div style={{ fontSize:13, fontWeight:700, color:'#334155', marginBottom:12 }}>Fatura {v.codigo}</div>
+        <div style={{ background:'#FFFBEB', border:'1px solid #FDE68A', borderRadius:6, padding:'8px 10px', marginBottom:12, fontSize:11, color:'#92400E' }}>
+          Base64 não é criptografia — é apenas codificação. <code>echo "NjAwMg==" | base64 -d</code> → 6002
+        </div>
+        <Row label="Código original" value="6002" highlight />
+        <Row label="Beneficiária" value={v.para} />
+        <Row label="Tipo" value={v.ref} />
+        <Row label="Valor" value={v.valor} highlight />
+      </div>}
+      {v.tipo==='chamado' && <div style={{ background:'#fff', border:'1px solid #E2E8F0', borderRadius:10, padding:20 }}>
+        <div style={{ fontSize:13, fontWeight:700, color:'#334155', marginBottom:12 }}>Chamado #{v.numero}</div>
+        <Row label="De" value={v.de} />
+        <Row label="Assunto" value={v.assunto} highlight />
+        <div style={{ marginTop:10, padding:'10px 12px', background:'#FEF2F2', borderRadius:6, fontSize:12, color:'#DC2626', lineHeight:1.6 }}>{v.msg}</div>
+      </div>}
+      {v.tipo==='pedidos' && <div>
+        <div style={{ fontSize:13, fontWeight:700, color:'#334155', marginBottom:10 }}>Pedidos de {v.nome}</div>
+        <table style={{ width:'100%', borderCollapse:'collapse', background:'#fff', border:'1px solid #E2E8F0', borderRadius:10, overflow:'hidden' }}>
+          <thead><tr style={{ background:'#F8FAFC' }}>
+            {['Item','Valor'].map(h=><th key={h} style={{ padding:'8px 12px', textAlign:'left', fontSize:11, fontWeight:600, color:'#64748B' }}>{h}</th>)}
+          </tr></thead>
+          <tbody>
+            {v.pedidos.map((p,i)=><tr key={i} style={{ borderTop:'1px solid #F1F5F9' }}>
+              <td style={{ padding:'8px 12px', fontSize:12, color:'#1E293B' }}>{p.item}</td>
+              <td style={{ padding:'8px 12px', fontSize:12, fontWeight:700, color:'#DC2626', fontFamily:"'IBM Plex Mono',monospace" }}>{p.valor}</td>
+            </tr>)}
+          </tbody>
+        </table>
+      </div>}
+    </div>
+  );
+}
+
+function IDORLab() {
+  const [active,setActive]=React.useState(null);
+  const activeTest=TESTS.find(t=>t.id===active)||null;
+  const toggle=id=>setActive(p=>p===id?null:id);
+  return (
+    <div style={{ display:'flex', flexDirection:'column', height:'100vh' }}>
+      <header style={{ background:'#fff', borderBottom:'1px solid #E2E8F0', padding:'11px 24px', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+          <a href="../lab_hub/index.html" style={{ display:'flex', alignItems:'center', gap:5, color:'#64748B', textDecoration:'none', fontSize:12, fontWeight:500 }}><Ic n="arrow-left" s={13} c="#64748B" /> Laboratórios</a>
+          <span style={{ color:'#E2E8F0', padding:'0 2px' }}>|</span>
+          <div style={{ display:'flex', alignItems:'center', gap:7 }}>
+            <div style={{ width:26, height:26, background:ACC+'18', borderRadius:6, display:'flex', alignItems:'center', justifyContent:'center' }}><Ic n="unlock" s={14} c={ACC} /></div>
+            <span style={{ fontSize:13, fontWeight:700, color:'#0F172A' }}>IDOR / Controle de Acesso</span>
+          </div>
+        </div>
+        <div style={{ display:'flex', alignItems:'center', gap:6 }}><Ic n="shield" s={15} c="#4F66D4" /><span style={{ fontSize:11, color:'#64748B' }}>Curso de Testes de Segurança</span></div>
+      </header>
+      <div style={{ display:'flex', flex:1, overflow:'hidden' }}>
+        <div style={{ width:260, background:'#F8FAFC', borderRight:'1px solid #E2E8F0', padding:'16px 12px', overflowY:'auto', flexShrink:0 }}>
+          <div style={{ fontSize:11, fontWeight:700, color:'#94A3B8', letterSpacing:'0.07em', textTransform:'uppercase', marginBottom:10, paddingLeft:4 }}>10 Testes</div>
+          {TESTS.map(t=>(
+            <div key={t.id}>
+              <div onClick={()=>toggle(t.id)} style={{ display:'flex', alignItems:'flex-start', gap:10, padding:'10px 12px', borderRadius:8, cursor:'pointer', background: active===t.id?ACC+'18':'transparent', border: active===t.id?`1.5px solid ${ACC}35`:'1.5px solid transparent', marginBottom:3 }}>
+                <div style={{ marginTop:1 }}><Ic n={t.icon} s={15} c={active===t.id?ACC:'#64748B'} /></div>
+                <div>
+                  <div style={{ fontSize:12, fontWeight:600, color: active===t.id?ACC:'#334155' }}>{t.name}</div>
+                  <div style={{ fontSize:11, color:'#94A3B8', marginTop:2, lineHeight:1.4 }}>{t.desc}</div>
+                </div>
+              </div>
+              {active===t.id && <div style={{ background:ACC+'0A', borderLeft:`3px solid ${ACC}`, padding:'8px 12px', marginBottom:4, borderRadius:'0 6px 6px 0', marginLeft:4 }}>
+                <code style={{ fontSize:10, fontFamily:"'IBM Plex Mono',monospace", color:'#64748B', wordBreak:'break-all' }}>{t.url}</code>
+                <div style={{ fontSize:10, color:'#94A3B8', marginTop:4 }}>Veja o resultado no painel à direita →</div>
+              </div>}
+            </div>
+          ))}
+          <div style={{ marginTop:12, borderTop:'1px solid #E2E8F0', paddingTop:12 }}>
+            <button onClick={()=>setActive(null)} style={{ width:'100%', padding:'9px', background:'#4F66D4', color:'#fff', border:'none', borderRadius:7, fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'inherit', marginBottom:6 }}>Resetar laboratório</button>
+            <a href="../lab_hub/index.html" style={{ display:'block', textAlign:'center', padding:'9px', background:'#6B7280', color:'#fff', textDecoration:'none', borderRadius:7, fontSize:12, fontWeight:600 }}>Trocar laboratório</a>
+          </div>
+        </div>
+        <div style={{ flex:1, padding:24, overflowY:'auto', background:'#fff' }}>
+          <div style={{ marginBottom:16, padding:'10px 14px', background:'#FFF8F0', border:'1px solid #FED7AA', borderRadius:8, display:'flex', gap:10 }}>
+            <Ic n="user" s={16} c={ACC} />
+            <div style={{ fontSize:12, color:'#92400E' }}>Logado como: <strong>Você (Aluno QA)</strong> · perfil #1 · Estagiário(a) de QA · Sala 1</div>
+          </div>
+          <ResourceView test={activeTest} />
+        </div>
+      </div>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<IDORLab />);
+</script>
+</body>
+</html>

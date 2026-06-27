@@ -1,0 +1,20 @@
+<!-- @dsCard group="Type" viewport="700x180" name="Mono" subtitle="IBM Plex Mono — payload, query, and code display" -->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="../styles.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--color-bg); padding: 16px; font-family: var(--font-sans, sans-serif); }
+    .block { background: var(--color-white); border: 1px solid var(--color-info-dark, #0056b3); border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 8px; font-family: var(--font-mono); font-size: var(--text-sm); line-height: var(--leading-relaxed); color: var(--color-text-primary); word-break: break-all; }
+    .label { font-size: 10px; color: var(--color-text-muted); margin-bottom: 4px; font-weight: var(--font-semibold); }
+  </style>
+</head>
+<body>
+  <div class="label">Payload — SQLi UNION:</div>
+  <div class="block">' UNION SELECT id, email || ':' || senha, 0, false FROM usuarios--</div>
+  <div class="label">Query executada:</div>
+  <div class="block">SELECT * FROM produtos WHERE nome LIKE '%<span style="color:var(--color-danger);">' OR 1=1--</span>%' AND oculto = false</div>
+</body>
+</html>

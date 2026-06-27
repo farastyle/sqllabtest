@@ -1,0 +1,46 @@
+<!-- @dsCard group="Colors" viewport="700x160" name="Semantic" subtitle="Success, warning, danger, info surfaces + text" -->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="../styles.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--color-bg); padding: 16px; font-family: var(--font-sans, sans-serif); }
+    .row { display: flex; gap: 8px; }
+    .group { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+    .surface { height: 40px; border-radius: var(--radius-sm); border: 1px solid rgba(0,0,0,.08); }
+    .solid { height: 20px; border-radius: var(--radius-sm); }
+    .label { font-size: 10px; color: var(--color-text-muted); margin-top: 2px; }
+    .val { font-size: 10px; font-family: var(--font-mono); color: var(--color-text-subtle); }
+  </style>
+</head>
+<body>
+  <div class="row">
+    <div class="group">
+      <div class="surface" style="background: var(--color-success-surface);"></div>
+      <div class="solid"   style="background: var(--color-success);"></div>
+      <div class="label">Success</div>
+      <div class="val">#28a745 / #d4edda</div>
+    </div>
+    <div class="group">
+      <div class="surface" style="background: var(--color-warning-surface);"></div>
+      <div class="solid"   style="background: var(--color-warning);"></div>
+      <div class="label">Warning</div>
+      <div class="val">#ffc107 / #fffbea</div>
+    </div>
+    <div class="group">
+      <div class="surface" style="background: var(--color-danger-surface);"></div>
+      <div class="solid"   style="background: var(--color-danger);"></div>
+      <div class="label">Danger</div>
+      <div class="val">#dc3545 / #f8d7da</div>
+    </div>
+    <div class="group">
+      <div class="surface" style="background: var(--color-info-surface);"></div>
+      <div class="solid"   style="background: var(--color-info);"></div>
+      <div class="label">Info</div>
+      <div class="val">#007bff / #f0f8ff</div>
+    </div>
+  </div>
+</body>
+</html>

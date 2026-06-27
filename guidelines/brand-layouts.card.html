@@ -1,0 +1,46 @@
+<!-- @dsCard group="Brand" viewport="700x140" name="Layout Patterns" subtitle="Centered card vs. sidebar+main — the two layout modes" -->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="../styles.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--color-bg); padding: 14px; font-family: var(--font-sans, sans-serif); }
+    .row { display: flex; gap: 12px; height: 100px; }
+    .layout { flex: 1; border: 1px solid var(--color-border); border-radius: var(--radius-md); overflow: hidden; display: flex; }
+    .sidebar-strip { width: 30%; background: var(--color-bg-secondary); border-right: 2px solid var(--color-border); padding: 6px; }
+    .main-strip { flex: 1; background: var(--color-white); padding: 6px 8px; }
+    .centered { flex: 1; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg-secondary); display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 4px; padding: 8px; }
+    .inner-card { background: var(--color-white); border: 2px solid var(--color-brand); border-radius: var(--radius-sm); width: 70%; height: 30px; }
+    .strip { height: 10px; background: var(--color-sqli-gradient); border-radius: 2px; margin-bottom: 4px; }
+    .micro { font-size: 9px; color: var(--color-text-subtle); margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <div class="row">
+    <div>
+      <div class="layout">
+        <div class="sidebar-strip">
+          <div class="strip"></div>
+          <div style="height:6px; background:var(--color-border); border-radius:2px; margin-bottom:3px;"></div>
+          <div style="height:6px; background:var(--color-border); border-radius:2px; margin-bottom:3px;"></div>
+          <div style="height:6px; background:var(--color-border); border-radius:2px;"></div>
+        </div>
+        <div class="main-strip">
+          <div style="height:6px; background:var(--color-border); border-radius:2px; margin-bottom:4px; width:60%;"></div>
+          <div style="height:30px; border:1px solid var(--color-border); border-radius:2px;"></div>
+        </div>
+      </div>
+      <div class="micro">Sidebar + Main (dashboards)</div>
+    </div>
+    <div>
+      <div class="centered">
+        <div style="height:18px; background:var(--color-sqli-gradient); border-radius: var(--radius-sm); width:100%; margin-bottom:4px;"></div>
+        <div class="inner-card"></div>
+      </div>
+      <div class="micro">Centered Card (login, hub, selectors)</div>
+    </div>
+  </div>
+</body>
+</html>

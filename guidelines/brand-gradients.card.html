@@ -1,0 +1,31 @@
+<!-- @dsCard group="Brand" viewport="700x130" name="Gradients" subtitle="Three lab header gradients — the primary decorative element" -->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="../styles.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--color-bg); padding: 14px; font-family: var(--font-sans, sans-serif); }
+    .row { display: flex; gap: 10px; }
+    .grad { flex: 1; height: 60px; border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; color: #fff; font-size: var(--text-sm); font-weight: var(--font-bold); gap: 6px; }
+    .token { font-size: 10px; color: var(--color-text-muted); margin-top: 5px; font-family: var(--font-mono); text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="row">
+    <div>
+      <div class="grad" style="background: var(--color-sqli-gradient);">💉 SQL Injection</div>
+      <div class="token">--color-sqli-gradient</div>
+    </div>
+    <div>
+      <div class="grad" style="background: var(--color-xss-gradient);">🧪 XSS</div>
+      <div class="token">--color-xss-gradient</div>
+    </div>
+    <div>
+      <div class="grad" style="background: var(--color-idor-gradient);">🔓 IDOR</div>
+      <div class="token">--color-idor-gradient</div>
+    </div>
+  </div>
+</body>
+</html>

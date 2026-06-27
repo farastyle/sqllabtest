@@ -1,0 +1,53 @@
+<!-- @dsCard group="Colors" viewport="700x180" name="Lab Accents" subtitle="SQLi (purple), XSS (green), IDOR (orange) — identity per lab" -->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="../styles.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--color-bg); padding: 16px; font-family: var(--font-sans, sans-serif); }
+    .labs { display: flex; gap: 10px; }
+    .lab { flex: 1; }
+    .header { height: 40px; border-radius: var(--radius-sm) var(--radius-sm) 0 0; }
+    .chips { display: flex; gap: 4px; padding: 6px 0; }
+    .chip { flex: 1; height: 28px; border-radius: var(--radius-sm); }
+    .name { font-size: 11px; font-weight: var(--font-bold); color: var(--color-text-primary); margin-bottom: 2px; }
+    .token { font-size: 10px; color: var(--color-text-subtle); font-family: var(--font-mono); }
+  </style>
+</head>
+<body>
+  <div class="labs">
+    <div class="lab">
+      <div class="header" style="background: var(--color-sqli-gradient);"></div>
+      <div class="chips">
+        <div class="chip" style="background: var(--color-brand);"></div>
+        <div class="chip" style="background: var(--color-brand-alt);"></div>
+        <div class="chip" style="background: var(--color-sqli-surface); border:1px solid var(--color-border);"></div>
+      </div>
+      <div class="name">💉 SQL Injection</div>
+      <div class="token">--color-brand #667eea</div>
+    </div>
+    <div class="lab">
+      <div class="header" style="background: var(--color-xss-gradient);"></div>
+      <div class="chips">
+        <div class="chip" style="background: var(--color-xss);"></div>
+        <div class="chip" style="background: var(--color-xss-dark);"></div>
+        <div class="chip" style="background: var(--color-xss-surface); border:1px solid var(--color-border);"></div>
+      </div>
+      <div class="name">🧪 XSS</div>
+      <div class="token">--color-xss #28a745</div>
+    </div>
+    <div class="lab">
+      <div class="header" style="background: var(--color-idor-gradient);"></div>
+      <div class="chips">
+        <div class="chip" style="background: var(--color-idor);"></div>
+        <div class="chip" style="background: var(--color-idor-dark);"></div>
+        <div class="chip" style="background: var(--color-idor-surface); border:1px solid var(--color-border);"></div>
+      </div>
+      <div class="name">🔓 IDOR</div>
+      <div class="token">--color-idor #fd7e14</div>
+    </div>
+  </div>
+</body>
+</html>
