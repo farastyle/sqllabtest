@@ -6,6 +6,18 @@ The target audience is QA students and junior developers learning offensive secu
 
 ---
 
+## ⚠️ Diretriz do Ambiente — Não Quebrar os Laboratórios
+
+Este é um ambiente de **sala de aula em uso ativo**. Nenhuma alteração — visual, refatoração, dependência nova, etc. — pode quebrar:
+
+- Os exercícios/payloads já documentados e testados em aula (SQLi: login bypass e demais payloads do `/sqli`; XSS: os 10 testes refletido/armazenado de `/xss/:sala`; IDOR: os 10 testes de controle de acesso de `/idor/:sala` e seu validador de respostas).
+- O fluxo de login por sala (`Sala-a`/`Sala-b`) e o painel oculto de progresso do professor.
+- O rastreamento de progresso, que vem **somente do banco** (tabela `idor_progresso`), nunca de `localStorage`.
+
+Antes de qualquer mudança que toque em `server.js` ou nas rotas, **rode os payloads documentados manualmente** (ver seção de cada lab) para confirmar que nada regrediu. Mudanças puramente visuais (CSS, HTML estático em `public/`) são seguras desde que não alterem nomes de campos de formulário, rotas ou a lógica de query/validação por trás delas.
+
+---
+
 ## Sources
 
 - **GitHub:** [farastyle/sqllabtest](https://github.com/farastyle/sqllabtest) — full server-side source (Node.js + Express + `pg`). Browse for route structure, seed data, vulnerability patterns, and inline HTML/CSS used to derive the visual language.
@@ -15,11 +27,21 @@ The target audience is QA students and junior developers learning offensive secu
 
 ---
 
+## Histórico de Mudanças
+
+| Data | Mudança |
+|------|---------|
+| 2026-06-27 | Hub (`public/hub.html`) ganhou o layout real da "trilha de aprendizado" gerado em claude.ai/design (banner com progresso, semanas 1–4, cards bloqueados das aulas 15–19) — antes era um grid simples de 3 cards. |
+| 2026-06-27 | Corrigido bug pré-existente no login do SQLi: o payload documentado como "mais fácil" (`' OR '1'='1` + qualquer senha) não bypassava por causa da precedência de `AND`/`OR` na query. Campos da `WHERE` foram reordenados (`senha = ... AND email = ...`) para que a injeção no `email` funcione sem precisar de `--`. |
+| 2026-06-27 | Telas de entrada (Hub, login do SQLi, seleção de sala do XSS, login do IDOR) migradas de HTML inline no `server.js` para arquivos estáticos em `public/`, servidos via `express.static`, usando o design system (`public/css/design-system.css`). **As dashboards pós-login (sidebar de 10 exercícios de cada lab) continuam com o HTML inline antigo** — não foram migradas. |
+
+---
+
 ## Products / Surfaces
 
 | Surface | Routes | Purpose |
 |---------|--------|---------|
-| **Hub** | `/` | Lab selection landing — 3-card grid |
+| **Hub** | `/` | Learning-trail landing — progress banner + 3 available lab cards (week 1–2) + locked future-class cards (weeks 3–4) |
 | **SQLi Lab** | `/sqli`, `/dashboard`, `/produtos` | Login form + sidebar dashboard with 10 injectable tests + product search table |
 | **XSS Lab** | `/xss`, `/xss/:sala` | Room selector + sidebar + reflected search + stored comment mural |
 | **IDOR Lab** | `/idor`, `/idor/:sala` | Room selector + sidebar + 10 access-control tests |
