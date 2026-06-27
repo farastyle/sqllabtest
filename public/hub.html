@@ -2,38 +2,222 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Laboratórios de Segurança</title>
+    <title>Curso de Testes de Segurança</title>
     <link rel="stylesheet" href="/css/design-system.css">
+    <style>
+        body { background: #F1F5F9; font-family: 'IBM Plex Sans', system-ui, sans-serif; margin: 0; }
+
+        .hub-header {
+            background: #fff; border-bottom: 1px solid #E2E8F0; padding: 14px 40px;
+            display: flex; align-items: center; justify-content: space-between;
+            position: sticky; top: 0; z-index: 10;
+        }
+        .hub-header-brand { display: flex; align-items: center; gap: 10px; }
+        .hub-header-brand h1 { font-weight: 700; font-size: 15px; color: #0F172A; line-height: 1.2; margin: 0; }
+        .hub-header-brand p { font-size: 11px; color: #94A3B8; margin: 1px 0 0; }
+        .hub-progress { display: flex; align-items: center; gap: 10px; }
+        .hub-progress span { font-size: 12px; color: #64748B; font-weight: 500; }
+        .hub-progress-bar { width: 80px; height: 6px; background: #E2E8F0; border-radius: 999px; overflow: hidden; }
+        .hub-progress-bar-fill { height: 100%; background: #4F66D4; border-radius: 999px; }
+
+        .hub-banner {
+            background: linear-gradient(135deg, #3B55C8 0%, #5B3FA6 100%);
+            padding: 28px 40px; color: #fff;
+        }
+        .hub-banner-inner {
+            max-width: 960px; margin: 0 auto; display: flex;
+            justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;
+        }
+        .hub-banner-title { font-size: 22px; font-weight: 700; line-height: 1.2; margin-bottom: 6px; }
+        .hub-banner-sub { font-size: 13px; opacity: 0.8; line-height: 1.5; }
+        .hub-banner-stats { display: flex; gap: 24px; }
+        .hub-banner-stat { text-align: center; }
+        .hub-banner-stat-n { font-size: 24px; font-weight: 700; line-height: 1; }
+        .hub-banner-stat-l { font-size: 11px; opacity: 0.7; margin-top: 3px; text-transform: uppercase; letter-spacing: 0.05em; }
+
+        .hub-main { max-width: 960px; margin: 0 auto; padding: 32px 20px 52px; }
+
+        .hub-week { margin-bottom: 36px; }
+        .hub-week-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+        .hub-week-label { font-size: 11px; font-weight: 700; color: #94A3B8; letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; }
+        .hub-week-line { flex: 1; height: 1px; background: #E2E8F0; }
+        .hub-week-theme { font-size: 11px; color: #94A3B8; white-space: nowrap; }
+
+        .hub-grid { display: grid; gap: 16px; }
+        .hub-grid--3 { grid-template-columns: repeat(3, 1fr); }
+        .hub-grid--1 { grid-template-columns: minmax(0, 360px); }
+        .hub-grid--4 { grid-template-columns: repeat(4, 1fr); }
+        @media (max-width: 800px) { .hub-grid--3, .hub-grid--4 { grid-template-columns: 1fr; } }
+
+        .hub-card {
+            display: block; text-decoration: none; background: #fff;
+            border-top: 1px solid #E2E8F0; border-right: 1px solid #E2E8F0; border-bottom: 1px solid #E2E8F0;
+            border-radius: 0 10px 10px 0; padding: 20px 18px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+            transition: box-shadow 0.15s, transform 0.15s;
+            cursor: pointer;
+        }
+        .hub-card:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.08); transform: translateY(-2px); }
+        .hub-card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+        .hub-card-icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+        .hub-card-badge {
+            display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600;
+            padding: 3px 8px; border-radius: 999px; background: #DCFCE7; color: #15803D; white-space: nowrap;
+        }
+        .hub-card-badge-dot { width: 6px; height: 6px; background: #22C55E; border-radius: 50%; display: inline-block; }
+        .hub-card-title { font-size: 14px; font-weight: 700; color: #0F172A; margin-bottom: 6px; line-height: 1.35; }
+        .hub-card-desc { font-size: 12px; color: #64748B; line-height: 1.6; margin-bottom: 14px; }
+        .hub-card-cta { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; }
+
+        .hub-card--locked {
+            background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 20px 18px;
+            cursor: default;
+        }
+        .hub-card--locked .hub-card-icon { background: #F1F5F9; }
+        .hub-card--locked .hub-card-badge { background: #F1F5F9; color: #94A3B8; }
+        .hub-card--locked .hub-card-title { color: #94A3B8; }
+        .hub-card--locked .hub-card-desc { color: #94A3B8; }
+        .hub-card--locked-meta { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #CBD5E1; margin-top: 8px; }
+        .hub-card--locked-meta-dot { width: 5px; height: 5px; background: #CBD5E1; border-radius: 50%; display: inline-block; }
+
+        .hub-footer { border-top: 1px solid #E2E8F0; background: #fff; padding: 16px 40px; text-align: center; font-size: 11px; color: #94A3B8; }
+    </style>
 </head>
-<body class="ds-body">
-    <div class="ds-container-sm">
-        <div class="ds-header-gradient ds-header-gradient--brand">
-            <h1>🔬 Laboratórios de Segurança</h1>
-            <p>Escolha o laboratório da aula de hoje</p>
+<body>
+    <header class="hub-header">
+        <div class="hub-header-brand">
+            <span style="font-size:26px;">🛡️</span>
+            <div>
+                <h1>Curso de Testes de Segurança</h1>
+                <p>Laboratórios Práticos · Semanas 1–4</p>
+            </div>
         </div>
+        <div class="hub-progress">
+            <span>3 de 8 labs disponíveis</span>
+            <div class="hub-progress-bar"><div class="hub-progress-bar-fill" style="width: 38%;"></div></div>
+        </div>
+    </header>
 
-        <div style="display: flex; gap: 20px; flex-wrap: wrap;">
-            <a href="/sqli" class="ds-card ds-card--sqli" style="flex: 1; min-width: 280px;">
-                <div class="ds-card-icon">💉</div>
-                <h2 style="color: var(--color-brand-muted);">SQL Injection</h2>
-                <p>Login bypass, UNION SELECT, blind injection e mais 10 testes práticos.</p>
-            </a>
-            <a href="/xss" class="ds-card ds-card--xss" style="flex: 1; min-width: 280px;">
-                <div class="ds-card-icon">🧪</div>
-                <h2 style="color: var(--color-xss-muted);">Cross-Site Scripting (XSS)</h2>
-                <p>XSS Refletido na busca e XSS Armazenado no mural de comentários.</p>
-            </a>
-            <a href="/idor" class="ds-card ds-card--idor" style="flex: 1; min-width: 280px;">
-                <div class="ds-card-icon">🔓</div>
-                <h2 style="color: var(--color-idor-muted);">IDOR / Controle de Acesso</h2>
-                <p>Manipulação de IDs, escalonamento de privilégio e 10 falhas de autorização.</p>
-            </a>
+    <div class="hub-banner">
+        <div class="hub-banner-inner">
+            <div>
+                <div class="hub-banner-title">Trilha de Aprendizado</div>
+                <div class="hub-banner-sub">Vulnerabilidades Web · Threat Modeling · Segurança em APIs</div>
+            </div>
+            <div class="hub-banner-stats">
+                <div class="hub-banner-stat"><div class="hub-banner-stat-n">8</div><div class="hub-banner-stat-l">labs</div></div>
+                <div class="hub-banner-stat"><div class="hub-banner-stat-n">4</div><div class="hub-banner-stat-l">semanas</div></div>
+                <div class="hub-banner-stat"><div class="hub-banner-stat-n">19</div><div class="hub-banner-stat-l">aulas</div></div>
+            </div>
         </div>
+    </div>
 
-        <div class="ds-footer-disclaimer">
-            <p>⚠️ <strong>Aviso:</strong> Estes laboratórios são fornecidos apenas para fins educacionais.<br>
-            Não use estas técnicas em ambientes de produção sem autorização!</p>
-        </div>
+    <main class="hub-main">
+        <section class="hub-week">
+            <div class="hub-week-head">
+                <span class="hub-week-label">Semana 1–2</span>
+                <div class="hub-week-line"></div>
+                <span class="hub-week-theme">Labs Práticos de Vulnerabilidades Web</span>
+            </div>
+            <div class="hub-grid hub-grid--3">
+                <a href="/sqli" class="hub-card" style="border-left: 4px solid #4F66D4;">
+                    <div class="hub-card-top">
+                        <div class="hub-card-icon" style="background: rgba(79,102,212,0.10);">🗄️</div>
+                        <span class="hub-card-badge"><span class="hub-card-badge-dot"></span>Disponível</span>
+                    </div>
+                    <div class="hub-card-title">SQL Injection</div>
+                    <div class="hub-card-desc">Login bypass, UNION SELECT, blind injection e mais 10 testes práticos com PostgreSQL real.</div>
+                    <div class="hub-card-cta" style="color:#4F66D4;">Acessar laboratório →</div>
+                </a>
+                <a href="/xss" class="hub-card" style="border-left: 4px solid #2D8F52;">
+                    <div class="hub-card-top">
+                        <div class="hub-card-icon" style="background: rgba(45,143,82,0.10);">💻</div>
+                        <span class="hub-card-badge"><span class="hub-card-badge-dot"></span>Disponível</span>
+                    </div>
+                    <div class="hub-card-title">Cross-Site Scripting (XSS)</div>
+                    <div class="hub-card-desc">XSS refletido na busca de produtos e XSS armazenado no mural de comentários, isolado por sala.</div>
+                    <div class="hub-card-cta" style="color:#2D8F52;">Acessar laboratório →</div>
+                </a>
+                <a href="/idor" class="hub-card" style="border-left: 4px solid #C97428;">
+                    <div class="hub-card-top">
+                        <div class="hub-card-icon" style="background: rgba(201,116,40,0.10);">🔓</div>
+                        <span class="hub-card-badge"><span class="hub-card-badge-dot"></span>Disponível</span>
+                    </div>
+                    <div class="hub-card-title">IDOR / Controle de Acesso</div>
+                    <div class="hub-card-desc">Manipulação de IDs previsíveis, escalonamento de privilégio e 10 falhas de autorização.</div>
+                    <div class="hub-card-cta" style="color:#C97428;">Acessar laboratório →</div>
+                </a>
+            </div>
+        </section>
+
+        <section class="hub-week">
+            <div class="hub-week-head">
+                <span class="hub-week-label">Semana 3</span>
+                <div class="hub-week-line"></div>
+                <span class="hub-week-theme">OWASP e Vulnerabilidades Comuns</span>
+            </div>
+            <div class="hub-grid hub-grid--1">
+                <div class="hub-card hub-card--locked">
+                    <div class="hub-card-top">
+                        <div class="hub-card-icon">🔒</div>
+                        <span class="hub-card-badge">🔒 Aula 15</span>
+                    </div>
+                    <div class="hub-card-title">Misconfiguration + Dados Sensíveis</div>
+                    <div class="hub-card-desc">Identificar configurações incorretas e exposição de dados sensíveis em aplicações web modernas.</div>
+                    <div class="hub-card--locked-meta"><span class="hub-card--locked-meta-dot"></span>17h às 18h · Em desenvolvimento</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="hub-week" style="margin-bottom: 0;">
+            <div class="hub-week-head">
+                <span class="hub-week-label">Semana 4</span>
+                <div class="hub-week-line"></div>
+                <span class="hub-week-theme">Threat Modeling + APIs</span>
+            </div>
+            <div class="hub-grid hub-grid--4">
+                <div class="hub-card hub-card--locked">
+                    <div class="hub-card-top">
+                        <div class="hub-card-icon">🔒</div>
+                        <span class="hub-card-badge">🔒 Aula 16</span>
+                    </div>
+                    <div class="hub-card-title">Threat Modeling — STRIDE</div>
+                    <div class="hub-card-desc">Mapear ameaças e riscos em aplicações com o framework STRIDE.</div>
+                    <div class="hub-card--locked-meta"><span class="hub-card--locked-meta-dot"></span>Semana 4</div>
+                </div>
+                <div class="hub-card hub-card--locked">
+                    <div class="hub-card-top">
+                        <div class="hub-card-icon">🔒</div>
+                        <span class="hub-card-badge">🔒 Aula 17</span>
+                    </div>
+                    <div class="hub-card-title">Superfície de Ataque</div>
+                    <div class="hub-card-desc">Identificar e reduzir a superfície de ataque em sistemas e APIs.</div>
+                    <div class="hub-card--locked-meta"><span class="hub-card--locked-meta-dot"></span>Semana 4</div>
+                </div>
+                <div class="hub-card hub-card--locked">
+                    <div class="hub-card-top">
+                        <div class="hub-card-icon">🔒</div>
+                        <span class="hub-card-badge">🔒 Aula 18</span>
+                    </div>
+                    <div class="hub-card-title">Segurança em APIs</div>
+                    <div class="hub-card-desc">Vulnerabilidades comuns em APIs REST e GraphQL.</div>
+                    <div class="hub-card--locked-meta"><span class="hub-card--locked-meta-dot"></span>Semana 4</div>
+                </div>
+                <div class="hub-card hub-card--locked">
+                    <div class="hub-card-top">
+                        <div class="hub-card-icon">🔒</div>
+                        <span class="hub-card-badge">🔒 Aula 19</span>
+                    </div>
+                    <div class="hub-card-title">Autenticação — Tokens</div>
+                    <div class="hub-card-desc">JWT, OAuth e falhas em autenticação baseada em tokens.</div>
+                    <div class="hub-card--locked-meta"><span class="hub-card--locked-meta-dot"></span>Semana 4</div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <div class="hub-footer">
+        Este laboratório é fornecido apenas para fins educacionais. Não utilize estas técnicas em ambientes de produção sem autorização explícita.
     </div>
 </body>
 </html>
