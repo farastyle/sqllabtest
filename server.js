@@ -1870,6 +1870,749 @@ app.post('/idor/:sala/reset', async (req, res) => {
     }
 });
 
+// ============================================================================
+// LABORATÓRIO DE MISCONFIGURATION + DADOS SENSÍVEIS
+// ============================================================================
+// Diferente do lab de IDOR, aqui nada é editado/excluído pelo aluno — cada
+// exercício expõe um conteúdo fixo (arquivo, painel, endpoint) que nunca
+// deveria estar acessível. Por isso não há tabelas de conteúdo: só uma
+// tabela de progresso (misconfig_progresso), criada em create_table_misconfig.sql.
+// Os valores abaixo são DIFERENTES entre sala 1 e sala 2 de propósito, para que
+// a resposta certa de um exercício nunca seja a mesma nas duas salas.
+const CONTEUDO_MISCONFIG = {
+    '1': {
+        backupSenha: 'Adm1n_2024_R3v',
+        envApiKey: 'pk_live_8f2k9XQ4mZ',
+        relatorioFaturamento: 'R$ 482.350,00',
+        stacktraceSenha: 'R3l_2024!',
+        painelCofreCodigo: 'COFRE-7741-A',
+        comentarioSenhaQaTemp: 'Temp#2024xx',
+        statusChaveSessao: 'SESS-INT-99821',
+        diagnosticoBuildHeader: 'build-8821-stage',
+        csvVipCodigo: 'VIP-CODE-3391',
+        apiNotaInterna: 'PED-CONF-5512'
+    },
+    '2': {
+        backupSenha: 'Root_S3gur4_99',
+        envApiKey: 'pk_live_3jR7vLpN2y',
+        relatorioFaturamento: 'R$ 597.120,00',
+        stacktraceSenha: 'Fin_2024#',
+        painelCofreCodigo: 'COFRE-5520-B',
+        comentarioSenhaQaTemp: 'Temp#2024yy',
+        statusChaveSessao: 'SESS-INT-44310',
+        diagnosticoBuildHeader: 'build-4470-stage',
+        csvVipCodigo: 'VIP-CODE-7765',
+        apiNotaInterna: 'PED-CONF-9087'
+    }
+};
+
+// As 10 lições do laboratório, da mais fácil (digitar uma URL) até a mais conceitual
+// (entender o que um cabeçalho de CORS aberto demais permite a um site malicioso).
+const testesMisconfig = [
+    {
+        id: 'misconfig1',
+        nome: '1️⃣ Backup de Banco Exposto (Arquivo Esquecido no Servidor)',
+        oQueAlunoFaz: 'Acesse o painel em /misconfig/SALA e veja que não existe nenhum link óbvio para arquivos de backup.',
+        acaoDoAtaque: 'Mesmo assim, digite diretamente na barra de endereço: /misconfig/SALA/backup-loja.sql — um arquivo de backup do banco de dados que ficou esquecido na pasta pública do servidor.',
+        licao: 'Backups de banco de dados nunca deveriam ficar acessíveis numa pasta pública do servidor. É um erro de configuração (misconfiguration) clássico: alguém gerou o arquivo para uso interno e esqueceu de removê-lo ou de restringir o acesso.',
+        pergunta: 'Qual é a senha do administrador encontrada dentro do arquivo de backup?'
+    },
+    {
+        id: 'misconfig2',
+        nome: '2️⃣ Arquivo .env Exposto (Credenciais de Configuração)',
+        oQueAlunoFaz: 'Sistemas Node.js costumam guardar credenciais sensíveis (chaves de API, senhas de banco) num arquivo chamado .env, que nunca deveria ser enviado pelo servidor.',
+        acaoDoAtaque: 'Acesse /misconfig/SALA/.env diretamente no navegador e veja que o servidor devolve o conteúdo desse arquivo de configuração, ao invés de bloquear o acesso.',
+        licao: 'Arquivos de configuração com segredos (.env, config.json, etc.) precisam estar fora da pasta pública do site e bloqueados no servidor. Se um atacante consegue baixar o .env, ele ganha acesso a todas as chaves e senhas do sistema de uma vez.',
+        pergunta: 'Qual é o valor da variável API_KEY_PAGAMENTO exposta no arquivo .env?'
+    },
+    {
+        id: 'misconfig3',
+        nome: '3️⃣ Listagem de Diretório Habilitada',
+        oQueAlunoFaz: 'Acesse /misconfig/SALA/uploads e observe que o servidor mostra a lista de TODOS os arquivos da pasta, como se fosse um gerenciador de arquivos — algo que nunca deveria estar habilitado em produção.',
+        acaoDoAtaque: 'Clique no arquivo "relatorio-financeiro-2024.txt" que aparece na listagem e leia seu conteúdo, mesmo sem ter nenhum link para ele em nenhuma outra tela do sistema.',
+        licao: '"Directory listing" habilitado expõe a estrutura inteira de arquivos do servidor para qualquer visitante — inclusive arquivos que ninguém pretendia divulgar, só porque alguém esqueceu de desativar essa opção no servidor web.',
+        pergunta: 'Qual é o valor do faturamento confidencial do trimestre informado no relatório?'
+    },
+    {
+        id: 'misconfig4',
+        nome: '4️⃣ Mensagem de Erro Detalhada (Stack Trace)',
+        oQueAlunoFaz: 'Acesse /misconfig/SALA/relatorio/7 (um número de relatório válido) e veja a tela normal de relatório.',
+        acaoDoAtaque: 'Agora acesse /misconfig/SALA/relatorio/abc (um valor que não é número, para forçar um erro). Em vez de mostrar uma mensagem genérica, o servidor devolve o erro técnico completo (stack trace), revelando caminhos internos do servidor e até uma string de conexão com o banco de dados.',
+        licao: 'Em produção, o servidor nunca deveria devolver o erro técnico bruto para o usuário — isso é trabalho de log interno, não de resposta HTTP. Mensagens de erro detalhadas entregam de bandeja informações que ajudam um atacante a entender e invadir o sistema.',
+        pergunta: 'Qual é a senha do usuário "relatorios_user" revelada na string de conexão dentro do erro?'
+    },
+    {
+        id: 'misconfig5',
+        nome: '5️⃣ Painel Administrativo Sem Autenticação',
+        oQueAlunoFaz: 'Repare que nenhum menu do laboratório linka para uma área administrativa interna.',
+        acaoDoAtaque: 'Mesmo assim, acesse diretamente /misconfig/SALA/painel-interno. O painel administrativo da empresa abre sem pedir login nenhum, mostrando informações que deveriam ser restritas à equipe interna.',
+        licao: 'Uma URL "escondida" não é controle de acesso — é só "segurança por obscuridade", que não funciona. Toda área administrativa precisa de autenticação real verificada no servidor, não apenas a ausência de um link visível.',
+        pergunta: 'Qual é o código de acesso ao cofre de documentos revelado no painel interno?'
+    },
+    {
+        id: 'misconfig6',
+        nome: '6️⃣ Credenciais Esquecidas em Comentário no Código-Fonte',
+        oQueAlunoFaz: 'Acesse a página /misconfig/SALA/contato normalmente, como qualquer visitante do site faria.',
+        acaoDoAtaque: 'Clique com o botão direito na página e escolha "Ver código-fonte da página" (ou aperte Ctrl+U). Procure por um comentário HTML deixado pela equipe de desenvolvimento, esquecido antes de colocar o site em produção.',
+        licao: 'Comentários no HTML são enviados ao navegador de qualquer visitante e podem ser lidos por qualquer pessoa — nunca deixe senhas, credenciais de teste ou anotações internas em comentários de código que vai para produção.',
+        pergunta: 'Qual é a senha do usuário de teste "qa_temp" encontrada no comentário?'
+    },
+    {
+        id: 'misconfig7',
+        nome: '7️⃣ Endpoint de Diagnóstico Expõe Dados Internos',
+        oQueAlunoFaz: 'Sistemas costumam ter rotas de diagnóstico/health-check para monitoramento automático (ex.: verificar se o servidor está de pé).',
+        acaoDoAtaque: 'Acesse /misconfig/SALA/status e veja que o endpoint devolve, em JSON, informações internas que vão muito além de "o servidor está ligado": ambiente, endereço de servidor interno e uma chave de sessão interna.',
+        licao: 'Endpoints de diagnóstico devem responder o mínimo necessário (ex.: apenas "ok"). Quando devolvem detalhes internos da infraestrutura, eles se tornam uma fonte gratuita de informação para quem está mapeando o sistema antes de um ataque.',
+        pergunta: 'Qual é o valor da "chave_sessao_interna" mostrada no JSON de /misconfig/SALA/status?'
+    },
+    {
+        id: 'misconfig8',
+        nome: '8️⃣ Cabeçalho de Resposta Revela Informação de Build Interna',
+        oQueAlunoFaz: 'Acesse /misconfig/SALA/diagnostico — a própria página mostra, na tela, quais cabeçalhos (headers) o servidor enviou na resposta dela mesma.',
+        acaoDoAtaque: 'Observe entre os cabeçalhos listados um chamado X-Internal-Build, com um valor que não deveria sair do ambiente interno de desenvolvimento.',
+        licao: 'Cabeçalhos HTTP personalizados criados para debug interno (versão de build, nome de servidor, caminho interno) às vezes são deixados ativos em produção sem querer. Qualquer cabeçalho de resposta é visível para qualquer visitante — não é um canal privado.',
+        pergunta: 'Qual é o valor do cabeçalho X-Internal-Build mostrado na página de diagnóstico?'
+    },
+    {
+        id: 'misconfig9',
+        nome: '9️⃣ Exportação Pública de Dados Sensíveis (CSV sem Autenticação)',
+        oQueAlunoFaz: 'Note que não existe nenhum botão "Exportar clientes" em nenhuma tela visível do laboratório.',
+        acaoDoAtaque: 'Acesse diretamente /misconfig/SALA/exportar/clientes.csv. O servidor devolve um arquivo CSV completo com dados de clientes (CPF, e-mail, cartão parcialmente mascarado), sem exigir login nenhum.',
+        licao: 'Funcionalidades de exportação de dados (relatórios, planilhas, CSVs) costumam ser construídas "por dentro" do sistema, pensando só em quem já está logado no painel — e acabam esquecidas sem nenhuma verificação de permissão quando alguém descobre a URL direta.',
+        pergunta: 'Qual é o código da observação interna anotada ao lado do cliente marcado como VIP no CSV?'
+    },
+    {
+        id: 'misconfig10',
+        nome: '🔟 CORS Mal Configurado — Qualquer Site Pode Ler os Dados',
+        oQueAlunoFaz: 'Acesse /misconfig/SALA/api/pedidos-internos e veja que essa API interna devolve, em JSON, pedidos e uma nota interna confidencial — sem exigir login.',
+        acaoDoAtaque: 'Observe, na própria tela, que o cabeçalho de resposta Access-Control-Allow-Origin está configurado como "*" (asterisco). Isso significa que essa API aceita ser chamada por JavaScript rodando em QUALQUER site da internet, não apenas pelo nosso laboratório — um site malicioso poderia embutir essa chamada e roubar esses dados de quem estivesse com a sessão ativa.',
+        licao: 'CORS (Cross-Origin Resource Sharing) existe para o navegador controlar quem pode ler a resposta de uma API por JavaScript de outro site. Usar Access-Control-Allow-Origin: "*" numa API que devolve dados sensíveis anula essa proteção por completo — é como deixar a porta dos fundos aberta para o mundo inteiro, achando que ninguém vai notar.',
+        pergunta: 'Qual é o código da "nota_interna" confidencial revelada no JSON da API de pedidos internos?'
+    }
+];
+
+// Respostas corretas de cada desafio — nunca são enviadas ao navegador, só comparadas no servidor.
+const RESPOSTAS_MISCONFIG = {
+    '1': {
+        misconfig1: CONTEUDO_MISCONFIG['1'].backupSenha,
+        misconfig2: CONTEUDO_MISCONFIG['1'].envApiKey,
+        misconfig3: CONTEUDO_MISCONFIG['1'].relatorioFaturamento,
+        misconfig4: CONTEUDO_MISCONFIG['1'].stacktraceSenha,
+        misconfig5: CONTEUDO_MISCONFIG['1'].painelCofreCodigo,
+        misconfig6: CONTEUDO_MISCONFIG['1'].comentarioSenhaQaTemp,
+        misconfig7: CONTEUDO_MISCONFIG['1'].statusChaveSessao,
+        misconfig8: CONTEUDO_MISCONFIG['1'].diagnosticoBuildHeader,
+        misconfig9: CONTEUDO_MISCONFIG['1'].csvVipCodigo,
+        misconfig10: CONTEUDO_MISCONFIG['1'].apiNotaInterna
+    },
+    '2': {
+        misconfig1: CONTEUDO_MISCONFIG['2'].backupSenha,
+        misconfig2: CONTEUDO_MISCONFIG['2'].envApiKey,
+        misconfig3: CONTEUDO_MISCONFIG['2'].relatorioFaturamento,
+        misconfig4: CONTEUDO_MISCONFIG['2'].stacktraceSenha,
+        misconfig5: CONTEUDO_MISCONFIG['2'].painelCofreCodigo,
+        misconfig6: CONTEUDO_MISCONFIG['2'].comentarioSenhaQaTemp,
+        misconfig7: CONTEUDO_MISCONFIG['2'].statusChaveSessao,
+        misconfig8: CONTEUDO_MISCONFIG['2'].diagnosticoBuildHeader,
+        misconfig9: CONTEUDO_MISCONFIG['2'].csvVipCodigo,
+        misconfig10: CONTEUDO_MISCONFIG['2'].apiNotaInterna
+    }
+};
+
+// Compara respostas ignorando acentos, maiúsculas/minúsculas e pontuação/espaçamento.
+function normalizarRespostaMisconfig(s) {
+    return String(s || '')
+        .normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '');
+}
+
+function renderMenuMisconfig(sala) {
+    let menu = '';
+    testesMisconfig.forEach(teste => {
+        const oQueAlunoFaz = teste.oQueAlunoFaz.replace(/SALA/g, sala);
+        const acaoDoAtaque = teste.acaoDoAtaque.replace(/SALA/g, sala);
+        menu += `
+            <div class="teste-item">
+                <a href="javascript:void(0)" class="teste-link" id="link-${teste.id}" onclick="toggleTesteMisconfig('${teste.id}')">
+                    <strong style="font-size:13px;" id="titulo-${teste.id}">${escapeHtml(teste.nome)}</strong>
+                </a>
+                <div class="teste-panel" id="panel-${teste.id}">
+                    <p style="margin:6px 0; color:#333; font-size:12px;"><strong>📍 O que o aluno faz:</strong> ${escapeHtml(oQueAlunoFaz)}</p>
+                    <p style="margin:6px 0; color:#0b5d57; font-size:12px;"><strong>⚔️ Ação do ataque:</strong> ${escapeHtml(acaoDoAtaque)}</p>
+                    <p style="margin:6px 0; color:#155724; font-size:12px;"><strong>🎓 Lição:</strong> ${escapeHtml(teste.licao)}</p>
+                    <div style="background:white; border:1px solid #0F766E; border-radius:4px; padding:10px; margin-top:10px;">
+                        <p style="margin:0 0 6px 0; font-size:12px; font-weight:bold; color:#333;">${escapeHtml(teste.pergunta)}</p>
+                        <input type="text" id="resposta-${teste.id}" placeholder="Cole aqui a resposta encontrada..." style="width:100%; padding:8px; margin-bottom:8px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box; font-size:12px;">
+                        <button onclick="validarTesteMisconfig('${teste.id}')" style="width:100%; padding:8px; background:#0F766E; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer; font-size:12px;">✅ Validar Resposta</button>
+                        <p id="feedback-${teste.id}" style="margin:8px 0 0 0; font-size:11px;"></p>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    return menu;
+}
+
+const sidebarStyleMisconfig = `
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: sans-serif; background: white; }
+    .container { display: flex; min-height: 100vh; }
+    .sidebar { width: 340px; background: #f5f5f5; padding: 20px; overflow-y: auto; border-right: 2px solid #ddd; }
+    .main { flex: 1; padding: 30px; overflow-y: auto; background: white; }
+    .sidebar h2 { margin-top: 0; margin-bottom: 6px; color: #333; font-size: 16px; }
+    .sidebar p { font-size: 12px; color: #666; margin-bottom: 15px; }
+    .teste-item { margin: 8px 0; }
+    .teste-link { display:block; padding:12px; border-radius:4px; text-decoration:none; background:#f9f9f9; border:1px solid #ddd; color:#333; cursor:pointer; transition:all 0.2s; }
+    .teste-link.active { background:#0F766E; color:white; border:2px solid #0B5D57; }
+    .teste-link.concluido { border-left: 4px solid #28a745; }
+    .teste-panel { display:none; background:#e9f9f7; padding:12px; border-radius:4px; margin-top:6px; border-left:4px solid #0F766E; }
+    .teste-panel.open { display:block; }
+    .reset-btn { display:block; width:100%; text-align:center; padding:12px; background:#6c757d; color:white; border:none; border-radius:4px; margin-top:20px; font-weight:bold; cursor:pointer; font-size:13px; }
+    .nav-link { display:block; text-align:center; padding:10px; background:#6c757d; color:white; text-decoration:none; border-radius:4px; margin-top:10px; font-size: 13px; }
+`;
+
+const scriptAccordionMisconfig = `
+    let testeAbertoMisconfig = null;
+    function toggleTesteMisconfig(id) {
+        const painelNovo = document.getElementById('panel-' + id);
+        const linkNovo = document.getElementById('link-' + id);
+        const reabrindoMesmo = testeAbertoMisconfig === id;
+
+        if (testeAbertoMisconfig) {
+            document.getElementById('panel-' + testeAbertoMisconfig).classList.remove('open');
+            document.getElementById('link-' + testeAbertoMisconfig).classList.remove('active');
+        }
+
+        if (reabrindoMesmo) {
+            testeAbertoMisconfig = null;
+        } else {
+            painelNovo.classList.add('open');
+            linkNovo.classList.add('active');
+            testeAbertoMisconfig = id;
+        }
+    }
+
+    function atualizarContadorMisconfig(total) {
+        const contador = document.getElementById('contador-progresso');
+        if (contador) contador.textContent = total + ' / 10 concluídos';
+    }
+
+    function marcarConcluidoMisconfig(id) {
+        const link = document.getElementById('link-' + id);
+        const titulo = document.getElementById('titulo-' + id);
+        if (link) link.classList.add('concluido');
+        if (titulo && titulo.textContent.indexOf('✅') === -1) titulo.textContent = '✅ ' + titulo.textContent;
+    }
+
+    function desmarcarTodosMisconfig() {
+        document.querySelectorAll('.teste-link.concluido').forEach(function(link) {
+            link.classList.remove('concluido');
+        });
+        document.querySelectorAll('[id^="titulo-misconfig"]').forEach(function(titulo) {
+            titulo.textContent = titulo.textContent.replace('✅ ', '');
+        });
+    }
+
+    async function carregarProgressoDoServidorMisconfig(sala) {
+        try {
+            const response = await fetch('/misconfig/' + sala + '/progresso');
+            const resultado = await response.json();
+            desmarcarTodosMisconfig();
+            (resultado.concluidos || []).forEach(marcarConcluidoMisconfig);
+            atualizarContadorMisconfig((resultado.concluidos || []).length);
+        } catch (err) {
+            console.error('Erro ao carregar progresso:', err.message);
+        }
+    }
+
+    async function validarTesteMisconfig(id) {
+        const sala = window.SALA_ATUAL;
+        const input = document.getElementById('resposta-' + id);
+        const feedback = document.getElementById('feedback-' + id);
+        const resposta = input.value;
+        try {
+            const response = await fetch('/misconfig/' + sala + '/validar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ testeId: id, resposta: resposta })
+            });
+            const resultado = await response.json();
+            if (resultado.correto) {
+                feedback.textContent = '✅ Correto! Exercício concluído.';
+                feedback.style.color = '#28a745';
+                await carregarProgressoDoServidorMisconfig(sala);
+            } else {
+                feedback.textContent = '❌ Ainda não é isso. Revise os passos do ataque e tente de novo.';
+                feedback.style.color = '#dc3545';
+            }
+        } catch (err) {
+            feedback.textContent = '❌ Erro ao validar: ' + err.message;
+            feedback.style.color = '#dc3545';
+        }
+    }
+
+    async function resetarProgressoMisconfig(sala) {
+        if (!confirm('⚠️ Isso vai zerar o progresso dos 10 exercícios do Lab ' + sala + ' de Misconfiguration. Continuar?')) {
+            return;
+        }
+        try {
+            const response = await fetch('/misconfig/' + sala + '/reset', { method: 'POST' });
+            const resultado = await response.json();
+            alert(resultado.mensagem || resultado.erro);
+            window.location.reload();
+        } catch (err) {
+            alert('❌ Erro ao resetar: ' + err.message);
+        }
+    }
+`;
+
+// Envolve o conteúdo de cada tela do lab no mesmo layout simples usado no lab de IDOR
+function paginaMisconfig(sala, titulo, conteudoHtml) {
+    return `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>${escapeHtml(titulo)} - Lab Misconfiguration ${sala}</title>
+        </head>
+        <body style="font-family: sans-serif; max-width: 800px; margin: 40px auto; padding: 20px;">
+            ${conteudoHtml}
+            <br>
+            <a href="/misconfig/${sala}" style="color:#0F766E; text-decoration:none;">← Voltar para o Laboratório</a>
+        </body>
+        </html>
+    `;
+}
+
+// Mesmas credenciais de turma usadas no lab de IDOR (login por sala, não por aluno).
+const CREDENCIAIS_MISCONFIG = {
+    'sala-a': { senha: 'a-sala', sala: '1', nomeExibicao: 'Sala A' },
+    'sala-b': { senha: 'sala-b', sala: '2', nomeExibicao: 'Sala B' }
+};
+
+// 0. LOGIN DA SALA — página estática, ver public/misconfig-login.html
+app.get('/misconfig', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'misconfig-login.html'));
+});
+
+app.post('/misconfig/login', (req, res) => {
+    const usuario = String(req.body.usuario || '').trim().toLowerCase();
+    const senha = String(req.body.senha || '');
+    const conta = CREDENCIAIS_MISCONFIG[usuario];
+
+    if (!conta || conta.senha !== senha) {
+        return res.redirect('/misconfig?erro=1');
+    }
+
+    req.session.misconfigSala = conta.sala;
+    req.session.misconfigNomeExibicao = conta.nomeExibicao;
+    res.redirect(`/misconfig/${conta.sala}`);
+});
+
+app.get('/misconfig/logout', (req, res) => {
+    req.session.misconfigSala = null;
+    req.session.misconfigNomeExibicao = null;
+    res.redirect('/misconfig');
+});
+
+function exigirLoginMisconfig(req, res, next) {
+    if (req.session.misconfigSala && req.session.misconfigSala === req.params.sala) {
+        return next();
+    }
+    res.redirect('/misconfig');
+}
+
+// PAINEL OCULTO DO PROFESSOR — precisa ser registrado ANTES de "/misconfig/:sala" abaixo,
+// pelo mesmo motivo do lab de IDOR (senão "painel-professor" seria tratado como valor de :sala).
+app.get('/misconfig/painel-professor', async (req, res) => {
+    try {
+        const r = await pool.query('SELECT sala, teste_id, concluido_em FROM misconfig_progresso');
+        const concluidos = {};
+        r.rows.forEach(row => {
+            concluidos[`${row.sala}:${row.teste_id}`] = row.concluido_em;
+        });
+
+        const linhas = testesMisconfig.map(teste => {
+            const celulaSala = (salaId) => {
+                const concluidoEm = concluidos[`${salaId}:${teste.id}`];
+                if (concluidoEm) {
+                    return `<td style="padding:10px; border:1px solid #ddd; text-align:center; background:#d4edda;">✅<br><small style="color:#666;">${new Date(concluidoEm).toLocaleString('pt-BR')}</small></td>`;
+                }
+                return '<td style="padding:10px; border:1px solid #ddd; text-align:center; background:#f8d7da; color:#721c24;">❌</td>';
+            };
+            return `
+                <tr>
+                    <td style="padding:10px; border:1px solid #ddd;">${escapeHtml(teste.nome)}</td>
+                    ${celulaSala('1')}
+                    ${celulaSala('2')}
+                </tr>
+            `;
+        }).join('');
+
+        const totalSalaA = Object.keys(concluidos).filter(k => k.startsWith('1:')).length;
+        const totalSalaB = Object.keys(concluidos).filter(k => k.startsWith('2:')).length;
+
+        res.send(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <title>Painel do Professor - Lab Misconfiguration</title>
+            </head>
+            <body style="font-family: sans-serif; max-width: 900px; margin: 40px auto; padding: 20px;">
+                <h2>🧑‍🏫 Painel do Professor — Progresso do Lab de Misconfiguration</h2>
+                <p style="color:#666;">Esta página não tem link em nenhum menu — só quem conhece o endereço acessa.</p>
+
+                <div style="display:flex; gap:15px; margin-bottom:20px;">
+                    <div style="flex:1; background:#e9f9f7; border-left:4px solid #0F766E; padding:15px; border-radius:4px;">
+                        <strong>Sala A</strong> — ${totalSalaA} / 10 concluídos
+                    </div>
+                    <div style="flex:1; background:#e9f9f7; border-left:4px solid #0F766E; padding:15px; border-radius:4px;">
+                        <strong>Sala B</strong> — ${totalSalaB} / 10 concluídos
+                    </div>
+                </div>
+
+                <table style="width:100%; border-collapse:collapse;">
+                    <thead>
+                        <tr style="background:#f2f2f2;">
+                            <th style="padding:10px; border:1px solid #ddd; text-align:left;">Exercício</th>
+                            <th style="padding:10px; border:1px solid #ddd;">Sala A</th>
+                            <th style="padding:10px; border:1px solid #ddd;">Sala B</th>
+                        </tr>
+                    </thead>
+                    <tbody>${linhas}</tbody>
+                </table>
+
+                <div style="margin-top:25px; display:flex; gap:10px;">
+                    <form action="/misconfig/painel-professor/limpar/1" method="POST" onsubmit="return confirm('Limpar todo o progresso registrado da Sala A?');">
+                        <button type="submit" style="padding:10px 18px; background:#6c757d; color:white; border:none; border-radius:4px; cursor:pointer;">🧹 Limpar progresso da Sala A</button>
+                    </form>
+                    <form action="/misconfig/painel-professor/limpar/2" method="POST" onsubmit="return confirm('Limpar todo o progresso registrado da Sala B?');">
+                        <button type="submit" style="padding:10px 18px; background:#6c757d; color:white; border:none; border-radius:4px; cursor:pointer;">🧹 Limpar progresso da Sala B</button>
+                    </form>
+                </div>
+            </body>
+            </html>
+        `);
+    } catch (error) {
+        res.status(500).send(`<p style="color:red; font-family:sans-serif;">❌ Erro: ${escapeHtml(error.message)}</p>`);
+    }
+});
+
+app.post('/misconfig/painel-professor/limpar/:sala', async (req, res) => {
+    const { sala } = req.params;
+    try {
+        await pool.query('DELETE FROM misconfig_progresso WHERE sala=$1', [sala]);
+        res.redirect('/misconfig/painel-professor');
+    } catch (error) {
+        res.status(500).send(`<p style="color:red; font-family:sans-serif;">❌ Erro: ${escapeHtml(error.message)}</p>`);
+    }
+});
+
+// 1. DASHBOARD DO LAB (menu lateral com os 10 testes + atalhos para as telas "expostas")
+app.get('/misconfig/:sala', exigirLoginMisconfig, (req, res) => {
+    const { sala } = req.params;
+    res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Laboratório Misconfiguration - Lab ${sala}</title>
+            <style>${sidebarStyleMisconfig}</style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="sidebar">
+                    <h2>⚙️ 10 Testes de Misconfiguration</h2>
+                    <p id="contador-progresso" style="font-weight:bold; color:#0F766E;">0 / 10 concluídos</p>
+                    <p>Clique em um teste para ver o passo a passo do ataque e responder o desafio.</p>
+                    ${renderMenuMisconfig(sala)}
+                    <button class="reset-btn" onclick="resetarProgressoMisconfig('${sala}')">🔄 Resetar Progresso do Lab ${sala}</button>
+                    <a href="/misconfig/logout" class="nav-link">🚪 Sair (${escapeHtml(req.session.misconfigNomeExibicao || '')})</a>
+                    <a href="/" class="nav-link">🏠 Voltar ao Hub</a>
+                </div>
+
+                <div class="main">
+                    <div style="text-align: center; padding: 30px; background: linear-gradient(135deg, #0F766E 0%, #0B5D57 100%); color: white; border-radius: 8px; margin-bottom: 30px;">
+                        <h1 style="margin: 0; font-size: 28px;">⚙️ Laboratório de Práticas — Lab ${sala}</h1>
+                        <p style="margin: 10px 0 0 0; font-size: 16px; opacity: 0.9;">Misconfiguration e Exposição de Dados Sensíveis - Aula Prática de Segurança</p>
+                    </div>
+
+                    <div style="background: #e9f9f7; border-left: 4px solid #0F766E; padding: 20px; margin-bottom: 30px; border-radius: 4px;">
+                        <h3 style="color: #0B5D57; margin-top: 0;">📚 Como Usar:</h3>
+                        <ol style="color: #555; line-height: 1.8; margin: 10px 0;">
+                            <li>Escolha um teste no menu lateral (👈 são 10 desafios diferentes) e leia "O que o aluno faz" e "Ação do ataque"</li>
+                            <li>Acesse diretamente as URLs/telas indicadas — todos os exercícios podem ser resolvidos sem nenhuma ferramenta externa</li>
+                            <li>Quando encontrar a informação pedida, cole a resposta no campo do próprio teste e clique em "Validar Resposta"</li>
+                            <li>Se a resposta estiver certa, o teste é marcado com ✅ — seu progresso fica salvo no servidor</li>
+                            <li>Se quiser recomeçar do zero, use o botão de reset mais abaixo no menu lateral (👇)</li>
+                        </ol>
+                    </div>
+
+                    <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                        <a href="/misconfig/${sala}/backup-loja.sql" style="flex: 1; min-width: 190px; text-decoration: none; display: block; background: white; border: 2px solid #0F766E; border-radius: 8px; padding: 18px; text-align: center; color: #333; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
+                            <div style="font-size: 28px;">🗄️</div>
+                            <h4 style="margin: 8px 0 4px 0; color: #0F766E; font-size:14px;">Backup do Banco</h4>
+                        </a>
+                        <a href="/misconfig/${sala}/uploads" style="flex: 1; min-width: 190px; text-decoration: none; display: block; background: white; border: 2px solid #0F766E; border-radius: 8px; padding: 18px; text-align: center; color: #333; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
+                            <div style="font-size: 28px;">📁</div>
+                            <h4 style="margin: 8px 0 4px 0; color: #0F766E; font-size:14px;">Pasta de Uploads</h4>
+                        </a>
+                        <a href="/misconfig/${sala}/painel-interno" style="flex: 1; min-width: 190px; text-decoration: none; display: block; background: white; border: 2px solid #0F766E; border-radius: 8px; padding: 18px; text-align: center; color: #333; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
+                            <div style="font-size: 28px;">🏢</div>
+                            <h4 style="margin: 8px 0 4px 0; color: #0F766E; font-size:14px;">Painel Interno</h4>
+                        </a>
+                        <a href="/misconfig/${sala}/status" style="flex: 1; min-width: 190px; text-decoration: none; display: block; background: white; border: 2px solid #0F766E; border-radius: 8px; padding: 18px; text-align: center; color: #333; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
+                            <div style="font-size: 28px;">🩺</div>
+                            <h4 style="margin: 8px 0 4px 0; color: #0F766E; font-size:14px;">Status / Debug</h4>
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <script>window.SALA_ATUAL = '${sala}';</script>
+            <script>${scriptAccordionMisconfig}</script>
+            <script>carregarProgressoDoServidorMisconfig('${sala}');</script>
+        </body>
+        </html>
+    `);
+});
+
+// 2. Exercício 1 — backup de banco esquecido na pasta pública
+app.get('/misconfig/:sala/backup-loja.sql', (req, res) => {
+    const { sala } = req.params;
+    const c = CONTEUDO_MISCONFIG[sala];
+    res.type('text/plain').send(
+`-- Backup automático gerado em 03/01/2024 02:00:11
+-- Sistema: TechNova Sistemas — Banco de Dados (cópia de homologação)
+BEGIN;
+
+CREATE TABLE usuarios (id INTEGER, email VARCHAR(100), senha VARCHAR(50), perfil VARCHAR(20));
+
+INSERT INTO usuarios (id, email, senha, perfil) VALUES
+  (1, 'admin@technova-sistemas.com', '${c.backupSenha}', 'admin'),
+  (2, 'suporte@technova-sistemas.com', 'Sup0rte#temp', 'user');
+
+COMMIT;
+-- FIM DO BACKUP
+`);
+});
+
+// 3. Exercício 2 — arquivo .env exposto
+app.get('/misconfig/:sala/.env', (req, res) => {
+    const { sala } = req.params;
+    const c = CONTEUDO_MISCONFIG[sala];
+    res.type('text/plain').send(
+`# Arquivo de configuração — NÃO deveria estar acessível publicamente
+PORT=3000
+NODE_ENV=homologacao
+DB_HOST=db-interno.technova-sistemas.local
+DB_USER=app_user
+DB_PASS=********
+API_KEY_PAGAMENTO=${c.envApiKey}
+SESSION_SECRET=********
+`);
+});
+
+// 4. Exercício 3 — listagem de diretório habilitada
+app.get('/misconfig/:sala/uploads', (req, res) => {
+    const { sala } = req.params;
+    res.send(paginaMisconfig(sala, 'Index of /uploads', `
+        <h1 style="font-size:18px; font-family:monospace;">Index of /misconfig/${sala}/uploads</h1>
+        <hr>
+        <ul style="font-family:monospace; line-height:1.8;">
+            <li><a href="/misconfig/${sala}/uploads/contrato-cliente.pdf">contrato-cliente.pdf</a></li>
+            <li><a href="/misconfig/${sala}/uploads/relatorio-financeiro-2024.txt">relatorio-financeiro-2024.txt</a></li>
+            <li><a href="/misconfig/${sala}/uploads/foto-evento.jpg">foto-evento.jpg</a></li>
+        </ul>
+        <hr>
+    `));
+});
+
+app.get('/misconfig/:sala/uploads/relatorio-financeiro-2024.txt', (req, res) => {
+    const { sala } = req.params;
+    const c = CONTEUDO_MISCONFIG[sala];
+    res.type('text/plain').send(
+`RELATÓRIO FINANCEIRO INTERNO — NÃO DIVULGAR
+Trimestre: Q4 2024
+Faturamento confidencial do trimestre: ${c.relatorioFaturamento}
+`);
+});
+
+app.get('/misconfig/:sala/uploads/contrato-cliente.pdf', (req, res) => {
+    res.type('text/plain').send('Arquivo de exemplo (sem conteúdo sensível) — usado apenas para simular a listagem de diretório.');
+});
+
+app.get('/misconfig/:sala/uploads/foto-evento.jpg', (req, res) => {
+    res.type('text/plain').send('Arquivo de exemplo (sem conteúdo sensível) — usado apenas para simular a listagem de diretório.');
+});
+
+// 5. Exercício 4 — mensagem de erro detalhada (stack trace)
+app.get('/misconfig/:sala/relatorio/:id', (req, res) => {
+    const { sala, id } = req.params;
+    const c = CONTEUDO_MISCONFIG[sala];
+    if (!/^\d+$/.test(id)) {
+        return res.status(500).type('text/plain').send(
+`Error: Cannot find relatorio with id "${id}"
+    at buscarRelatorio (/srv/technova/app/routes/relatorios.js:58:13)
+    at conectarBanco (/srv/technova/app/db.js:42:9)
+    at processarRequisicao (/srv/technova/app/server.js:301:5)
+
+Banco de dados (ambiente de homologação):
+postgres://relatorios_user:${c.stacktraceSenha}@10.0.4.12:5432/technova_homolog
+
+NODE_ENV=homologacao | versao_app=2.3.1
+`);
+    }
+    res.send(paginaMisconfig(sala, 'Relatório', `<p>📄 Relatório #${escapeHtml(id)} carregado normalmente. Nada de especial por aqui — tente um valor que não seja número.</p>`));
+});
+
+// 6. Exercício 5 — painel administrativo sem autenticação
+app.get('/misconfig/:sala/painel-interno', (req, res) => {
+    const { sala } = req.params;
+    const c = CONTEUDO_MISCONFIG[sala];
+    res.send(paginaMisconfig(sala, 'Painel Interno', `
+        <h2>🏢 Painel Administrativo Interno — TechNova Sistemas</h2>
+        <p style="color:#666;">Esta área é de uso exclusivo da equipe interna.</p>
+        <div style="background:#e9f9f7; border-left:4px solid #0F766E; padding:15px; border-radius:4px; margin-top:15px;">
+            <p><strong>Código de acesso ao cofre de documentos:</strong> ${escapeHtml(c.painelCofreCodigo)}</p>
+            <p><strong>Funcionários ativos:</strong> 48</p>
+            <p><strong>Último backup completo:</strong> 03/01/2024</p>
+        </div>
+    `));
+});
+
+// 7. Exercício 6 — credenciais esquecidas em comentário HTML
+app.get('/misconfig/:sala/contato', (req, res) => {
+    const { sala } = req.params;
+    const c = CONTEUDO_MISCONFIG[sala];
+    res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="UTF-8"><title>Fale Conosco - TechNova Sistemas</title></head>
+        <body style="font-family: sans-serif; max-width: 800px; margin: 40px auto; padding: 20px;">
+            <!-- TODO: remover usuário de teste antes de produção: qa_temp / ${c.comentarioSenhaQaTemp} -->
+            <h2>📞 Fale Conosco</h2>
+            <p>Preencha o formulário abaixo e nossa equipe responde em até 2 dias úteis.</p>
+            <form>
+                <label>Nome:</label><br><input type="text" style="width:100%; padding:8px; margin:6px 0;"><br>
+                <label>Mensagem:</label><br><textarea style="width:100%; padding:8px; margin:6px 0;" rows="4"></textarea><br>
+                <button type="button" disabled style="padding:10px 18px;">Enviar (desativado no laboratório)</button>
+            </form>
+            <br>
+            <a href="/misconfig/${sala}" style="color:#0F766E; text-decoration:none;">← Voltar para o Laboratório</a>
+        </body>
+        </html>
+    `);
+});
+
+// 8. Exercício 7 — endpoint de diagnóstico expõe dados internos
+app.get('/misconfig/:sala/status', (req, res) => {
+    const { sala } = req.params;
+    const c = CONTEUDO_MISCONFIG[sala];
+    res.json({
+        status: 'ok',
+        ambiente: 'homologacao',
+        versao_node: process.version,
+        servidor_interno: '10.0.4.12',
+        chave_sessao_interna: c.statusChaveSessao
+    });
+});
+
+// 9. Exercício 8 — cabeçalho de resposta revela informação de build interna
+app.get('/misconfig/:sala/diagnostico', (req, res) => {
+    const { sala } = req.params;
+    const c = CONTEUDO_MISCONFIG[sala];
+    res.set('X-Internal-Build', c.diagnosticoBuildHeader);
+    res.send(paginaMisconfig(sala, 'Diagnóstico', `
+        <h2>🩺 Diagnóstico do Servidor</h2>
+        <p>Cabeçalhos enviados nesta resposta:</p>
+        <pre style="background:#f5f5f5; padding:12px; border-radius:4px;">Content-Type: text/html
+X-Internal-Build: ${escapeHtml(c.diagnosticoBuildHeader)}</pre>
+    `));
+});
+
+// 10. Exercício 9 — exportação pública de dados sensíveis (CSV sem autenticação)
+app.get('/misconfig/:sala/exportar/clientes.csv', (req, res) => {
+    const { sala } = req.params;
+    const c = CONTEUDO_MISCONFIG[sala];
+    res.type('text/csv').send(
+`nome,email,cpf,cartao_mascarado,observacao
+Joao Pedro Lima,joao.lima@cliente.com,123.***.***-09,**** **** **** 4471,
+Fernanda Costa,fernanda.costa@cliente.com,234.***.***-18,**** **** **** 2290,
+Marcelo Tanaka (VIP),marcelo.tanaka@cliente.com,345.***.***-27,**** **** **** 8834,${c.csvVipCodigo}
+Juliana Prado,juliana.prado@cliente.com,456.***.***-36,**** **** **** 1190,
+`);
+});
+
+// 11. Exercício 10 — CORS mal configurado (Access-Control-Allow-Origin: *)
+app.get('/misconfig/:sala/api/pedidos-internos', (req, res) => {
+    const { sala } = req.params;
+    const c = CONTEUDO_MISCONFIG[sala];
+    res.set('Access-Control-Allow-Origin', '*');
+    const dados = {
+        pedidos: [
+            { numero: 9001, item: 'Licença Corporativa Anual', valor: 4200.00 },
+            { numero: 9002, item: 'Consultoria de Migração de Dados', valor: 18900.00 }
+        ],
+        nota_interna: c.apiNotaInterna
+    };
+    res.send(paginaMisconfig(sala, 'API de Pedidos Internos', `
+        <h2>📦 API Interna de Pedidos</h2>
+        <p>Esta API não exige login e devolve dados internos da empresa.</p>
+        <h3>Resposta (JSON):</h3>
+        <pre style="background:#f5f5f5; padding:12px; border-radius:4px;">${escapeHtml(JSON.stringify(dados, null, 2))}</pre>
+        <h3>Cabeçalhos enviados nesta resposta:</h3>
+        <pre style="background:#f5f5f5; padding:12px; border-radius:4px;">Access-Control-Allow-Origin: *</pre>
+        <p>⚠️ Isso significa que um script rodando em <strong>qualquer site da internet</strong> pode chamar essa API com <code>fetch()</code> e ler essa resposta — não só o nosso laboratório.</p>
+    `));
+});
+
+// 12. PROGRESSO — usado pelo dashboard para marcar os ✅ vindos do banco
+app.get('/misconfig/:sala/progresso', async (req, res) => {
+    const { sala } = req.params;
+    try {
+        const r = await pool.query('SELECT teste_id FROM misconfig_progresso WHERE sala=$1', [sala]);
+        res.json({ concluidos: r.rows.map(row => row.teste_id) });
+    } catch (error) {
+        res.status(500).json({ concluidos: [], erro: error.message });
+    }
+});
+
+// 13. VALIDAÇÃO DAS RESPOSTAS
+app.post('/misconfig/:sala/validar', async (req, res) => {
+    const { sala } = req.params;
+    const { testeId, resposta } = req.body;
+    const esperado = (RESPOSTAS_MISCONFIG[sala] || {})[testeId];
+    if (!esperado) return res.status(400).json({ correto: false, erro: 'Teste desconhecido' });
+
+    const correto = normalizarRespostaMisconfig(resposta) === normalizarRespostaMisconfig(esperado);
+
+    if (correto) {
+        try {
+            await pool.query(
+                'INSERT INTO misconfig_progresso (sala, teste_id) VALUES ($1, $2) ON CONFLICT (sala, teste_id) DO UPDATE SET concluido_em = NOW()',
+                [sala, testeId]
+            );
+        } catch (error) {
+            console.error('Erro ao registrar progresso de Misconfiguration:', error.message);
+        }
+    }
+
+    res.json({ correto });
+});
+
+// 14. RESET DO PROGRESSO (não há outro dado mutável para restaurar neste lab)
+app.post('/misconfig/:sala/reset', async (req, res) => {
+    const { sala } = req.params;
+    try {
+        await pool.query('DELETE FROM misconfig_progresso WHERE sala=$1', [sala]);
+        res.json({ sucesso: true, mensagem: `✅ Progresso do Lab ${sala} de Misconfiguration resetado com sucesso!` });
+    } catch (error) {
+        res.status(500).json({ sucesso: false, erro: error.message });
+    }
+});
+
 // Inicialização da porta dinâmica (Render ou Local)
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🔥 Servidor do Laboratório iniciado com sucesso na porta ${PORT}`));

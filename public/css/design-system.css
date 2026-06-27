@@ -28,6 +28,14 @@
   --color-idor-surface:   #fff8f0;
   --color-idor-border:    #fd7e14;
 
+  /* ── Lab: Misconfiguration + Dados Sensíveis ── */
+  --color-misconfig:          #0F766E;
+  --color-misconfig-dark:     #0B5D57;
+  --color-misconfig-gradient: linear-gradient(135deg, #0F766E 0%, #0B5D57 100%);
+  --color-misconfig-surface:  #f0fdfa;
+  --color-misconfig-border:   #0F766E;
+  --color-misconfig-muted:    #0F766E;
+
   /* ── Semantic ── */
   --color-success:         #28a745;
   --color-success-dark:    #1e7e34;
@@ -156,6 +164,7 @@ body.ds-body {
 .ds-header-gradient--sqli  { background: var(--color-sqli-gradient); }
 .ds-header-gradient--xss   { background: linear-gradient(135deg, var(--color-xss-muted) 0%, var(--color-xss-dark) 100%); }
 .ds-header-gradient--idor  { background: linear-gradient(135deg, var(--color-idor-muted) 0%, var(--color-idor-dark) 100%); }
+.ds-header-gradient--misconfig { background: var(--color-misconfig-gradient); }
 .ds-header-gradient h1 { margin: 0; font-size: var(--text-3xl); font-weight: var(--font-bold); }
 .ds-header-gradient p  { margin: var(--space-2) 0 0 0; font-size: var(--text-md); opacity: 0.9; }
 
@@ -177,6 +186,7 @@ body.ds-body {
 .ds-card--sqli  { border-color: var(--color-brand-muted); }
 .ds-card--xss   { border-color: var(--color-xss-muted); }
 .ds-card--idor  { border-color: var(--color-idor-muted); }
+.ds-card--misconfig { border-color: var(--color-misconfig-muted); }
 .ds-card .ds-card-icon { font-size: 48px; }
 .ds-card h2 { margin: var(--space-2) 0 var(--space-1) 0; font-size: var(--text-xl); }
 .ds-card p  { color: var(--color-text-muted); font-size: var(--text-base); margin: 0; }
@@ -205,6 +215,8 @@ body.ds-body {
 .ds-alert--xss     .ds-alert-title { color: var(--color-xss-dark); }
 .ds-alert--idor    { border-color: var(--color-idor-muted); background: var(--color-idor-surface); }
 .ds-alert--idor    .ds-alert-title { color: var(--color-idor-dark); }
+.ds-alert--misconfig { border-color: var(--color-misconfig-muted); background: var(--color-misconfig-surface); }
+.ds-alert--misconfig .ds-alert-title { color: var(--color-misconfig-dark); }
 
 /* ── Buttons ── */
 .ds-btn {

@@ -31,6 +31,7 @@ Antes de qualquer mudança que toque em `server.js` ou nas rotas, **rode os payl
 
 | Data | Mudança |
 |------|---------|
+| 2026-06-27 | Quarto laboratório adicionado: **Misconfiguration + Dados Sensíveis** (`/misconfig`), com 2 salas e 10 exercícios cada (backup exposto, .env exposto, directory listing, stack trace, painel sem autenticação, comentário HTML com credenciais, endpoint de debug, header interno, CSV público, CORS aberto). Card correspondente desbloqueado no hub (4 de 8 labs). |
 | 2026-06-27 | Hub (`public/hub.html`) ganhou o layout real da "trilha de aprendizado" gerado em claude.ai/design (banner com progresso, semanas 1–4, cards bloqueados das aulas 15–19) — antes era um grid simples de 3 cards. |
 | 2026-06-27 | Corrigido bug pré-existente no login do SQLi: o payload documentado como "mais fácil" (`' OR '1'='1` + qualquer senha) não bypassava por causa da precedência de `AND`/`OR` na query. Campos da `WHERE` foram reordenados (`senha = ... AND email = ...`) para que a injeção no `email` funcione sem precisar de `--`. |
 | 2026-06-27 | Telas de entrada (Hub, login do SQLi, seleção de sala do XSS, login do IDOR) migradas de HTML inline no `server.js` para arquivos estáticos em `public/`, servidos via `express.static`, usando o design system (`public/css/design-system.css`). **As dashboards pós-login (sidebar de 10 exercícios de cada lab) continuam com o HTML inline antigo** — não foram migradas. |
@@ -45,6 +46,7 @@ Antes de qualquer mudança que toque em `server.js` ou nas rotas, **rode os payl
 | **SQLi Lab** | `/sqli`, `/dashboard`, `/produtos` | Login form + sidebar dashboard with 10 injectable tests + product search table |
 | **XSS Lab** | `/xss`, `/xss/:sala` | Room selector + sidebar + reflected search + stored comment mural |
 | **IDOR Lab** | `/idor`, `/idor/:sala` | Room selector + sidebar + 10 access-control tests |
+| **Misconfiguration Lab** | `/misconfig`, `/misconfig/:sala` | Room login (shared IDOR credentials) + sidebar + 10 misconfiguration/sensitive-data-exposure tests |
 
 All dashboard surfaces share the same **sidebar-accordion + main-content** layout.
 
