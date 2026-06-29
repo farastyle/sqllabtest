@@ -2225,6 +2225,21 @@ function exigirLoginMisconfig(req, res, next) {
 
 // PAINEL OCULTO DO PROFESSOR — precisa ser registrado ANTES de "/misconfig/:sala" abaixo,
 // pelo mesmo motivo do lab de IDOR (senão "painel-professor" seria tratado como valor de :sala).
+// Endpoint JSON usado pelo polling automático do painel (não recarrega a página inteira,
+// só busca o estado atual a cada poucos segundos e atualiza as células na tela).
+app.get('/misconfig/painel-professor/dados', async (req, res) => {
+    try {
+        const r = await pool.query('SELECT sala, teste_id, concluido_em FROM misconfig_progresso');
+        const concluidos = {};
+        r.rows.forEach(row => {
+            concluidos[`${row.sala}:${row.teste_id}`] = row.concluido_em;
+        });
+        res.json({ concluidos });
+    } catch (error) {
+        res.status(500).json({ erro: error.message });
+    }
+});
+
 app.get('/misconfig/painel-professor', async (req, res) => {
     try {
         const r = await pool.query('SELECT sala, teste_id, concluido_em FROM misconfig_progresso');
@@ -2233,22 +2248,21 @@ app.get('/misconfig/painel-professor', async (req, res) => {
             concluidos[`${row.sala}:${row.teste_id}`] = row.concluido_em;
         });
 
-        const linhas = testesMisconfig.map(teste => {
-            const celulaSala = (salaId) => {
-                const concluidoEm = concluidos[`${salaId}:${teste.id}`];
-                if (concluidoEm) {
-                    return `<td style="padding:10px; border:1px solid #ddd; text-align:center; background:#d4edda;">✅<br><small style="color:#666;">${new Date(concluidoEm).toLocaleString('pt-BR')}</small></td>`;
-                }
-                return '<td style="padding:10px; border:1px solid #ddd; text-align:center; background:#f8d7da; color:#721c24;">❌</td>';
-            };
-            return `
+        const celulaSala = (testeId, salaId) => {
+            const concluidoEm = concluidos[`${salaId}:${testeId}`];
+            if (concluidoEm) {
+                return `<td id="cel-${salaId}-${testeId}" style="padding:10px; border:1px solid #ddd; text-align:center; background:#d4edda;">✅<br><small style="color:#666;">${new Date(concluidoEm).toLocaleString('pt-BR')}</small></td>`;
+            }
+            return `<td id="cel-${salaId}-${testeId}" style="padding:10px; border:1px solid #ddd; text-align:center; background:#f8d7da; color:#721c24;">❌</td>`;
+        };
+
+        const linhas = testesMisconfig.map(teste => `
                 <tr>
                     <td style="padding:10px; border:1px solid #ddd;">${escapeHtml(teste.nome)}</td>
-                    ${celulaSala('1')}
-                    ${celulaSala('2')}
+                    ${celulaSala(teste.id, '1')}
+                    ${celulaSala(teste.id, '2')}
                 </tr>
-            `;
-        }).join('');
+            `).join('');
 
         const totalSalaA = Object.keys(concluidos).filter(k => k.startsWith('1:')).length;
         const totalSalaB = Object.keys(concluidos).filter(k => k.startsWith('2:')).length;
@@ -2262,14 +2276,14 @@ app.get('/misconfig/painel-professor', async (req, res) => {
             </head>
             <body style="font-family: sans-serif; max-width: 900px; margin: 40px auto; padding: 20px;">
                 <h2>🧑‍🏫 Painel do Professor — Progresso do Lab de Misconfiguration</h2>
-                <p style="color:#666;">Esta página não tem link em nenhum menu — só quem conhece o endereço acessa.</p>
+                <p style="color:#666;">Esta página não tem link em nenhum menu — só quem conhece o endereço acessa. <span id="status-auto-atualizar" style="color:#0F766E;">🟢 Atualizando automaticamente...</span></p>
 
                 <div style="display:flex; gap:15px; margin-bottom:20px;">
                     <div style="flex:1; background:#e9f9f7; border-left:4px solid #0F766E; padding:15px; border-radius:4px;">
-                        <strong>Sala A</strong> — ${totalSalaA} / 10 concluídos
+                        <strong>Sala A</strong> — <span id="contador-sala-1">${totalSalaA}</span> / 10 concluídos
                     </div>
                     <div style="flex:1; background:#e9f9f7; border-left:4px solid #0F766E; padding:15px; border-radius:4px;">
-                        <strong>Sala B</strong> — ${totalSalaB} / 10 concluídos
+                        <strong>Sala B</strong> — <span id="contador-sala-2">${totalSalaB}</span> / 10 concluídos
                     </div>
                 </div>
 
@@ -2292,6 +2306,53 @@ app.get('/misconfig/painel-professor', async (req, res) => {
                         <button type="submit" style="padding:10px 18px; background:#6c757d; color:white; border:none; border-radius:4px; cursor:pointer;">🧹 Limpar progresso da Sala B</button>
                     </form>
                 </div>
+
+                <script>
+                    // Busca o progresso atual a cada 5 segundos e atualiza só as células que mudaram,
+                    // sem recarregar a página inteira — assim o professor pode deixar isso aberto
+                    // num projetor durante a aula e ver as respostas dos alunos chegando em tempo real.
+                    const TESTES_IDS = ${JSON.stringify(testesMisconfig.map(t => t.id))};
+
+                    async function atualizarPainelAutomaticamente() {
+                        try {
+                            const response = await fetch('/misconfig/painel-professor/dados');
+                            const resultado = await response.json();
+                            const concluidos = resultado.concluidos || {};
+
+                            ['1', '2'].forEach(salaId => {
+                                let total = 0;
+                                TESTES_IDS.forEach(testeId => {
+                                    const celula = document.getElementById('cel-' + salaId + '-' + testeId);
+                                    if (!celula) return;
+                                    const concluidoEm = concluidos[salaId + ':' + testeId];
+                                    if (concluidoEm) {
+                                        total++;
+                                        const dataFormatada = new Date(concluidoEm).toLocaleString('pt-BR');
+                                        if (celula.dataset.concluidoEm !== concluidoEm) {
+                                            celula.style.background = '#d4edda';
+                                            celula.style.color = '';
+                                            celula.innerHTML = '✅<br><small style="color:#666;">' + dataFormatada + '</small>';
+                                            celula.dataset.concluidoEm = concluidoEm;
+                                        }
+                                    } else if (celula.dataset.concluidoEm) {
+                                        celula.style.background = '#f8d7da';
+                                        celula.style.color = '#721c24';
+                                        celula.innerHTML = '❌';
+                                        delete celula.dataset.concluidoEm;
+                                    }
+                                });
+                                const contador = document.getElementById('contador-sala-' + salaId);
+                                if (contador) contador.textContent = total;
+                            });
+
+                            document.getElementById('status-auto-atualizar').textContent = '🟢 Atualizando automaticamente...';
+                        } catch (err) {
+                            document.getElementById('status-auto-atualizar').textContent = '🔴 Falha ao atualizar: ' + err.message;
+                        }
+                    }
+
+                    setInterval(atualizarPainelAutomaticamente, 5000);
+                </script>
             </body>
             </html>
         `);
