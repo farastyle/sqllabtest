@@ -1928,7 +1928,7 @@ const testesMisconfig = [
     {
         id: 'misconfig3',
         nome: '3️⃣ Listagem de Diretório Habilitada',
-        oQueAlunoFaz: 'Acesse /misconfig/SALA/uploads e observe que o servidor mostra a lista de TODOS os arquivos da pasta, como se fosse um gerenciador de arquivos — algo que nunca deveria estar habilitado em produção.',
+        oQueAlunoFaz: 'Clique no atalho "Pasta de Uploads" no painel (ou acesse /misconfig/SALA/uploads) e observe que o servidor mostra a lista de TODOS os arquivos da pasta, como se fosse um gerenciador de arquivos — algo que nunca deveria estar habilitado em produção.',
         acaoDoAtaque: 'Clique no arquivo "relatorio-financeiro-2024.txt" que aparece na listagem e leia seu conteúdo, mesmo sem ter nenhum link para ele em nenhuma outra tela do sistema.',
         licao: '"Directory listing" habilitado expõe a estrutura inteira de arquivos do servidor para qualquer visitante — inclusive arquivos que ninguém pretendia divulgar, só porque alguém esqueceu de desativar essa opção no servidor web.',
         pergunta: 'Qual é o valor do faturamento confidencial do trimestre informado no relatório?'
@@ -1952,7 +1952,7 @@ const testesMisconfig = [
     {
         id: 'misconfig6',
         nome: '6️⃣ Credenciais Esquecidas em Comentário no Código-Fonte',
-        oQueAlunoFaz: 'Acesse a página /misconfig/SALA/contato normalmente, como qualquer visitante do site faria.',
+        oQueAlunoFaz: 'Clique no atalho "Contato" no painel (ou acesse /misconfig/SALA/contato) normalmente, como qualquer visitante do site faria.',
         acaoDoAtaque: 'Clique com o botão direito na página e escolha "Ver código-fonte da página" (ou aperte Ctrl+U). Procure por um comentário HTML deixado pela equipe de desenvolvimento, esquecido antes de colocar o site em produção.',
         licao: 'Comentários no HTML são enviados ao navegador de qualquer visitante e podem ser lidos por qualquer pessoa — nunca deixe senhas, credenciais de teste ou anotações internas em comentários de código que vai para produção.',
         pergunta: 'Qual é a senha do usuário de teste "qa_temp" encontrada no comentário?'
@@ -1961,14 +1961,14 @@ const testesMisconfig = [
         id: 'misconfig7',
         nome: '7️⃣ Endpoint de Diagnóstico Expõe Dados Internos',
         oQueAlunoFaz: 'Sistemas costumam ter rotas de diagnóstico/health-check para monitoramento automático (ex.: verificar se o servidor está de pé).',
-        acaoDoAtaque: 'Acesse /misconfig/SALA/status e veja que o endpoint devolve, em JSON, informações internas que vão muito além de "o servidor está ligado": ambiente, endereço de servidor interno e uma chave de sessão interna.',
+        acaoDoAtaque: 'Clique no atalho "Status / Debug" no painel (ou acesse /misconfig/SALA/status) e veja que o endpoint devolve, em JSON, informações internas que vão muito além de "o servidor está ligado": ambiente, endereço de servidor interno e uma chave de sessão interna.',
         licao: 'Endpoints de diagnóstico devem responder o mínimo necessário (ex.: apenas "ok"). Quando devolvem detalhes internos da infraestrutura, eles se tornam uma fonte gratuita de informação para quem está mapeando o sistema antes de um ataque.',
         pergunta: 'Qual é o valor da "chave_sessao_interna" mostrada no JSON de /misconfig/SALA/status?'
     },
     {
         id: 'misconfig8',
         nome: '8️⃣ Cabeçalho de Resposta Revela Informação de Build Interna',
-        oQueAlunoFaz: 'Acesse /misconfig/SALA/diagnostico — a própria página mostra, na tela, quais cabeçalhos (headers) o servidor enviou na resposta dela mesma.',
+        oQueAlunoFaz: 'Clique no atalho "Diagnóstico" no painel (ou acesse /misconfig/SALA/diagnostico) — a própria página mostra, na tela, quais cabeçalhos (headers) o servidor enviou na resposta dela mesma.',
         acaoDoAtaque: 'Observe entre os cabeçalhos listados um chamado X-Internal-Build, com um valor que não deveria sair do ambiente interno de desenvolvimento.',
         licao: 'Cabeçalhos HTTP personalizados criados para debug interno (versão de build, nome de servidor, caminho interno) às vezes são deixados ativos em produção sem querer. Qualquer cabeçalho de resposta é visível para qualquer visitante — não é um canal privado.',
         pergunta: 'Qual é o valor do cabeçalho X-Internal-Build mostrado na página de diagnóstico?'
@@ -2351,21 +2351,21 @@ app.get('/misconfig/:sala', exigirLoginMisconfig, (req, res) => {
                     </div>
 
                     <div style="display: flex; gap: 15px; flex-wrap: wrap;">
-                        <a href="/misconfig/${sala}/backup-loja.sql" style="flex: 1; min-width: 190px; text-decoration: none; display: block; background: white; border: 2px solid #0F766E; border-radius: 8px; padding: 18px; text-align: center; color: #333; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
-                            <div style="font-size: 28px;">🗄️</div>
-                            <h4 style="margin: 8px 0 4px 0; color: #0F766E; font-size:14px;">Backup do Banco</h4>
-                        </a>
                         <a href="/misconfig/${sala}/uploads" style="flex: 1; min-width: 190px; text-decoration: none; display: block; background: white; border: 2px solid #0F766E; border-radius: 8px; padding: 18px; text-align: center; color: #333; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
                             <div style="font-size: 28px;">📁</div>
                             <h4 style="margin: 8px 0 4px 0; color: #0F766E; font-size:14px;">Pasta de Uploads</h4>
                         </a>
-                        <a href="/misconfig/${sala}/painel-interno" style="flex: 1; min-width: 190px; text-decoration: none; display: block; background: white; border: 2px solid #0F766E; border-radius: 8px; padding: 18px; text-align: center; color: #333; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
-                            <div style="font-size: 28px;">🏢</div>
-                            <h4 style="margin: 8px 0 4px 0; color: #0F766E; font-size:14px;">Painel Interno</h4>
+                        <a href="/misconfig/${sala}/contato" style="flex: 1; min-width: 190px; text-decoration: none; display: block; background: white; border: 2px solid #0F766E; border-radius: 8px; padding: 18px; text-align: center; color: #333; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
+                            <div style="font-size: 28px;">📞</div>
+                            <h4 style="margin: 8px 0 4px 0; color: #0F766E; font-size:14px;">Contato</h4>
                         </a>
                         <a href="/misconfig/${sala}/status" style="flex: 1; min-width: 190px; text-decoration: none; display: block; background: white; border: 2px solid #0F766E; border-radius: 8px; padding: 18px; text-align: center; color: #333; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
                             <div style="font-size: 28px;">🩺</div>
                             <h4 style="margin: 8px 0 4px 0; color: #0F766E; font-size:14px;">Status / Debug</h4>
+                        </a>
+                        <a href="/misconfig/${sala}/diagnostico" style="flex: 1; min-width: 190px; text-decoration: none; display: block; background: white; border: 2px solid #0F766E; border-radius: 8px; padding: 18px; text-align: center; color: #333; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
+                            <div style="font-size: 28px;">📡</div>
+                            <h4 style="margin: 8px 0 4px 0; color: #0F766E; font-size:14px;">Diagnóstico</h4>
                         </a>
                     </div>
                 </div>
