@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Laboratório STRIDE — Modelagem de Ameaças</title>
+    <link rel="stylesheet" href="/css/design-system.css">
+    <style>
+        .stride-gradient {
+            background: linear-gradient(135deg, #4338CA 0%, #3730A3 100%);
+            color: white;
+            padding: var(--space-7) var(--space-6);
+            border-radius: var(--radius-md);
+            margin-bottom: var(--space-6);
+            text-align: center;
+        }
+        .stride-gradient h1 { margin: 0 0 6px 0; font-size: var(--text-2xl); }
+        .stride-gradient p  { margin: 0; opacity: 0.85; font-size: var(--text-sm); }
+        .stride-ref {
+            background: #f8f9ff;
+            border: 1px solid #c7d2fe;
+            border-radius: var(--radius-md);
+            padding: var(--space-5);
+            margin-bottom: var(--space-6);
+        }
+        .stride-ref table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .stride-ref th  { background: #4338CA; color: white; padding: 7px 10px; text-align: left; }
+        .stride-ref td  { padding: 6px 10px; border-bottom: 1px solid #e2e8f0; }
+        .stride-ref tr:last-child td { border-bottom: none; }
+        .stride-ref tr:nth-child(odd) td { background: #f1f5f9; }
+    </style>
+</head>
+<body class="ds-body">
+    <div class="ds-container-sm" style="max-width: 520px; margin: 60px auto;">
+
+        <div class="stride-gradient">
+            <h1>🗺️ Threat Modeling — STRIDE</h1>
+            <p>Identificar e classificar ameaças com o framework STRIDE</p>
+        </div>
+
+        <div id="erro-login" class="ds-alert ds-alert--danger" style="display:none; text-align:center; margin-bottom: var(--space-5);">
+            ❌ Usuário ou senha inválidos.
+        </div>
+
+        <div class="stride-ref">
+            <table>
+                <tr>
+                    <th style="width:28px;">✦</th>
+                    <th>Categoria</th>
+                    <th>Ameaça</th>
+                </tr>
+                <tr><td style="font-weight:bold;color:#DC2626;">S</td><td>Spoofing</td><td>Fingir ser outra entidade</td></tr>
+                <tr><td style="font-weight:bold;color:#D97706;">T</td><td>Tampering</td><td>Modificar dados sem autorização</td></tr>
+                <tr><td style="font-weight:bold;color:#7C3AED;">R</td><td>Repudiation</td><td>Negar ter realizado uma ação</td></tr>
+                <tr><td style="font-weight:bold;color:#2563EB;">I</td><td>Information Disclosure</td><td>Expor dados sigilosos</td></tr>
+                <tr><td style="font-weight:bold;color:#374151;">D</td><td>Denial of Service</td><td>Tornar o sistema indisponível</td></tr>
+                <tr><td style="font-weight:bold;color:#059669;">E</td><td>Elevation of Privilege</td><td>Ganhar permissões indevidas</td></tr>
+            </table>
+        </div>
+
+        <form action="/stride/login" method="POST" class="ds-card" style="text-align:left; cursor:default; border-top: 4px solid #4338CA;">
+            <label class="ds-label">Usuário:</label>
+            <input type="text" name="usuario" required class="ds-input" placeholder="sala-a ou sala-b">
+
+            <label class="ds-label">Senha:</label>
+            <input type="password" name="senha" required class="ds-input">
+
+            <button type="submit" class="ds-btn ds-btn--full" style="background:#4338CA; color:white; margin-top: var(--space-3);">
+                🗺️ Entrar no Laboratório
+            </button>
+        </form>
+
+        <div style="text-align:center; margin-top: var(--space-5);">
+            <a href="/" class="ds-link" style="color: var(--color-text-subtle); font-size: var(--text-sm);">← Voltar ao Hub</a>
+        </div>
+    </div>
+
+    <script>
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('erro') === '1') {
+            document.getElementById('erro-login').style.display = 'block';
+        }
+    </script>
+</body>
+</html>

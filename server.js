@@ -2674,6 +2674,645 @@ app.post('/misconfig/:sala/reset', async (req, res) => {
     }
 });
 
+// =====================================
+// LAB 5: STRIDE — MODELAGEM DE AMEAÇAS
+// Sala 1 → BancoPix  |  Sala 2 → MedConsulta
+// =====================================
+
+// Exercícios 1-6: identificar a categoria STRIDE (mesma letra nas duas salas, cenários diferentes).
+// Exercícios 7-10: aplicação com respostas genuinamente diferentes por sala.
+const CONTEUDO_STRIDE = {
+    '1': {
+        nomeSistema: 'BancoPix',
+        descSistema: 'Sistema bancário digital para transferências instantâneas via Pix',
+        stride1: {
+            conceito: `<strong>Spoofing</strong> é quando um atacante finge ser outra entidade — usuário, sistema ou serviço — para ganhar acesso não autorizado. O controle principal é <strong>autenticação forte</strong>.`,
+            cenario: `<p>Maria Souza usa o BancoPix com CPF <code>123.456.789-00</code>. O sistema aceita login com CPF + senha de 4 dígitos, sem segundo fator. Uma lista de CPFs vaza online; um atacante testa senhas comuns (<code>1234</code>, <code>0000</code>) até acessar a conta de Maria e realizar transferências não autorizadas.</p>`,
+            pergunta: `Qual é a <strong>letra do STRIDE</strong> que representa a ameaça de um atacante se passar por Maria para acessar a conta bancária dela?`,
+            dica: `O atacante está fingindo ser outra pessoa. Qual letra do STRIDE é sobre IDENTIDADE falsificada?`
+        },
+        stride2: {
+            conceito: `<strong>Tampering</strong> é a modificação não autorizada de dados — em trânsito ou em repouso. O controle é <strong>validação server-side + assinaturas digitais</strong>.`,
+            cenario: `<p>O BancoPix gera links de pagamento com o valor na URL: <code>/pagar?valor=1500.00&amp;conta_destino=55443</code>. Um cliente descobre que pode editar a URL no navegador, mudando para <code>valor=0.01</code>, e paga R$ 0,01 em vez de R$ 1.500. O servidor não revalida o valor recebido.</p>`,
+            pergunta: `Qual é a <strong>letra do STRIDE</strong> que descreve a ameaça de um atacante modificar dados que não deveria poder alterar?`,
+            dica: `O dado foi alterado sem autorização. Qual letra é sobre MODIFICAÇÃO de dados?`
+        },
+        stride3: {
+            conceito: `<strong>Repudiation</strong> é a capacidade de negar ter realizado uma ação, por falta de evidências. O controle é <strong>log de auditoria imutável</strong>.`,
+            cenario: `<p>Um gerente do BancoPix aprova pelo sistema uma transferência de R$ 280.000 para o exterior. Três dias depois, nega ter feito isso. O sistema registra apenas quem <em>iniciou</em> a transferência, mas não quem a <em>aprovou</em> — não há trilha de auditoria para o painel administrativo.</p>`,
+            pergunta: `Qual é a <strong>letra do STRIDE</strong> que descreve a ameaça de o gerente conseguir NEGAR ter aprovado a transferência por falta de registros?`,
+            dica: `Ele pode NEGAR porque não há prova. Qual letra do STRIDE é sobre NEGAÇÃO de ações?`
+        },
+        stride4: {
+            conceito: `<strong>Information Disclosure</strong> é a exposição de dados sigilosos a quem não deveria ter acesso — intencional ou acidental. O controle é <strong>tratamento de erros + classificação de dados</strong>.`,
+            cenario: `<p>Ao acessar <code>/extrato?id=abc</code>, o BancoPix responde: <code style="font-size:10px;">NullPointerException at BalanceService.java:143 — jdbc:postgresql://db-prod-01.bancoPix.internal:5432/bancoPix_prod?user=extrato_svc&amp;password=Xtr4t0_Pr0d#2024</code>. Um atacante anota a senha e o endereço do banco de dados.</p>`,
+            pergunta: `Qual é a <strong>letra do STRIDE</strong> que representa a ameaça de o sistema revelar dados internos que jamais deveriam chegar a um usuário externo?`,
+            dica: `Dados sigilosos ficaram visíveis para quem não deveria ver. Qual letra é sobre EXPOSIÇÃO de informações?`
+        },
+        stride5: {
+            conceito: `<strong>Denial of Service</strong> é tornar um sistema indisponível para usuários legítimos por sobrecarga. O controle é <strong>rate limiting, WAF e infraestrutura resiliente</strong>.`,
+            cenario: `<p>O endpoint de login do BancoPix não tem rate limiting. Um script envia 80.000 requisições POST simultâneas para <code>/login</code>. O servidor fica sobrecarregado e recusa conexões legítimas — clientes reais ficam sem acesso por 45 minutos.</p>`,
+            pergunta: `Qual é a <strong>letra do STRIDE</strong> que representa a ameaça de tornar o sistema INDISPONÍVEL para clientes legítimos?`,
+            dica: `O serviço ficou fora do ar para todos. Qual letra do STRIDE é sobre DISPONIBILIDADE negada?`
+        },
+        stride6: {
+            conceito: `<strong>Elevation of Privilege</strong> é quando um usuário obtém permissões além das concedidas. O controle é <strong>verificação de autorização sempre no servidor</strong>, nunca só no cliente.`,
+            cenario: `<p>O painel administrativo do BancoPix valida permissões apenas no JavaScript: <code>if (usuario.perfil === "admin") mostrarPainel()</code>. Um cliente abre o console do navegador, executa <code>usuario.perfil = "admin"</code> e acessa tudo — cancelar contas, ver dados de todos, bloquear transferências.</p>`,
+            pergunta: `Qual é a <strong>letra do STRIDE</strong> que representa a ameaça de um cliente comum GANHAR poderes de administrador sem autorização?`,
+            dica: `O usuário "subiu de nível" sem permissão. Qual letra é sobre ESCALADA de privilégios?`
+        },
+        stride7: {
+            conceito: `Uma <strong>fronteira de confiança (trust boundary)</strong> separa o que você controla do que você NÃO controla. Cruzá-la exige verificação extra: autenticação mútua, validação de entrada e TLS.`,
+            cenario: `<p>O time do BancoPix mapeia os componentes do sistema:</p>
+<pre style="background:#f5f5f5;padding:10px;border-radius:4px;font-size:11px;overflow:auto;">
+[Navegador do Cliente]
+        | HTTPS/TLS
+[Servidor BancoPix (Node.js)]
+        | TCP interno
+[Banco de Dados PostgreSQL]
+        | API REST / JSON
+[Antifraude S.A. — serviço terceirizado de detecção de fraude]
+        | Webhook de retorno
+[Servidor BancoPix (Node.js)]
+</pre>
+<p>A fronteira mais crítica separa os componentes internos do BancoPix de um sistema <strong>externo que não controlamos</strong> — e que, se comprometido, enviaria dados adulterados para nossas decisões de crédito.</p>`,
+            pergunta: `Qual é o nome <strong>exato</strong> do componente externo (terceirizado) no diagrama com o qual o BancoPix tem a fronteira de confiança mais crítica?`,
+            dica: `Procure no diagrama o componente que NÃO pertence ao BancoPix — aquele que nenhum dev da empresa controla.`
+        },
+        stride8: {
+            conceito: `Cada categoria STRIDE tem <strong>controles específicos</strong>: Spoofing → autenticação forte; Tampering → assinaturas; Repudiation → logs imutáveis; Info Disclosure → criptografia; DoS → rate limiting; EoP → autorização server-side.`,
+            cenario: `<p>O threat model do BancoPix identificou: <em>"Um atacante rouba o token de sessão de um cliente via XSS e acessa a conta como se fosse ele."</em> A mitigação proposta: além da senha, o usuário confirma um <strong>código temporário enviado ao celular cadastrado</strong> a cada login — tornando o token roubado inútil sem o celular físico da vítima.</p>`,
+            pergunta: `Como é chamado (em inglês, usando a <strong>sigla de 3 letras</strong>) o controle de segurança descrito acima?`,
+            dica: `Multi-Factor ___? A sigla tem 3 letras e significa "Autenticação de Múltiplos Fatores".`
+        },
+        stride9: {
+            conceito: `Na priorização, ameaças que afetam <strong>TODOS os usuários simultaneamente sem precisar de conta</strong> são geralmente as mais críticas — alto impacto × alta probabilidade de exploração.`,
+            cenario: `<p>O BancoPix identificou 3 ameaças:</p>
+<ul style="font-size:12px;line-height:1.8;padding-left:18px;">
+<li><strong>A)</strong> A comunicação entre o app mobile e o servidor não usa TLS — qualquer atacante na mesma rede Wi-Fi intercepta TODAS as transferências de QUALQUER cliente.</li>
+<li><strong>B)</strong> Um funcionário insatisfeito pode deletar transações sem que haja log de auditoria.</li>
+<li><strong>C)</strong> O sistema aceita senhas de 4 dígitos — um bot pode testar as 10.000 combinações para um CPF específico.</li>
+</ul>
+<p>Qual ameaça pode comprometer dados de <strong>todos os clientes simultaneamente</strong>, sem precisar de conta no sistema?</p>`,
+            pergunta: `Qual é a <strong>letra (A, B ou C)</strong> da ameaça mais crítica — aquela que pode comprometer qualquer comunicação de qualquer cliente?`,
+            dica: `Qual ameaça afeta TODA comunicação com o servidor, independente de usuário ou conta?`
+        },
+        stride10: {
+            conceito: `Um <strong>documento de threat model</strong> descreve o sistema, seus ativos, atores (legítimos e maliciosos), fluxos de dados e ameaças STRIDE com controles propostos. Recebe um código de revisão para rastreabilidade.`,
+            cenario: `<p>O BancoPix vai lançar <strong>Empréstimo Instantâneo</strong>. O fluxo:</p>
+<ol style="font-size:12px;line-height:1.8;padding-left:18px;">
+<li>Cliente solicita empréstimo via app</li>
+<li>Sistema consulta score: <code>/credito/score?cpf=XXX</code> — <strong>sem autenticação</strong></li>
+<li>Se aprovado, contrato gerado: <code>/contratos/gerar?cliente_id=YYY&amp;valor=ZZZ</code></li>
+</ol>
+<p>A equipe identificou: (1) <code>/credito/score</code> expõe o score de qualquer CPF sem login → <strong>Information Disclosure</strong>; (2) <code>/contratos/gerar</code> não valida se <code>cliente_id</code> pertence ao usuário autenticado → <strong>Tampering</strong>. O documento de threat model deste fluxo recebeu o código de revisão <strong>REV-BANCOP-7742</strong>.</p>`,
+            pergunta: `Qual é o <strong>código de revisão</strong> atribuído ao threat model do Empréstimo Instantâneo do BancoPix?`,
+            dica: `O código está no texto do cenário — procure por "REV-".`
+        }
+    },
+    '2': {
+        nomeSistema: 'MedConsulta',
+        descSistema: 'Plataforma de consultas médicas e prontuários eletrônicos online',
+        stride1: {
+            conceito: `<strong>Spoofing</strong> é quando um atacante finge ser outra entidade — usuário, sistema ou serviço — para ganhar acesso não autorizado. O controle principal é <strong>autenticação forte</strong>.`,
+            cenario: `<p>O MedConsulta permite login de médicos usando apenas o CRM — número público, disponível no site do CFM. Não há senha nem segundo fator. Um atacante encontra o CRM do Dr. Carlos no site do CFM e faz login no MedConsulta como se fosse ele — cancelando consultas e acessando prontuários de pacientes.</p>`,
+            pergunta: `Qual é a <strong>letra do STRIDE</strong> que representa a ameaça de um atacante se passar pelo Dr. Carlos para acessar o sistema médico?`,
+            dica: `O atacante está fingindo ser outra pessoa. Qual letra do STRIDE é sobre IDENTIDADE falsificada?`
+        },
+        stride2: {
+            conceito: `<strong>Tampering</strong> é a modificação não autorizada de dados — em trânsito ou em repouso. O controle é <strong>validação server-side + assinaturas digitais</strong>.`,
+            cenario: `<p>O MedConsulta registra prescrições via formulário com campo oculto: <code>&lt;input type="hidden" name="medico_id" value="1042"&gt;</code>. Um paciente abre o DevTools e muda <code>medico_id</code> para <code>9999</code> (CRM de médico renomado). A prescrição é salva como emitida pelo médico renomado, sem ele jamais tê-la visto.</p>`,
+            pergunta: `Qual é a <strong>letra do STRIDE</strong> que descreve a ameaça de um paciente MODIFICAR um campo que não deveria poder alterar?`,
+            dica: `O dado foi alterado sem autorização. Qual letra é sobre MODIFICAÇÃO de dados?`
+        },
+        stride3: {
+            conceito: `<strong>Repudiation</strong> é a capacidade de negar ter realizado uma ação, por falta de evidências. O controle é <strong>log de auditoria imutável</strong>.`,
+            cenario: `<p>A Dra. Fernanda acessa o prontuário da paciente Ana às 23h e exclui uma anotação que poderia indicar negligência. O MedConsulta não registra quem acessou prontuários nem quais alterações foram feitas. Numa investigação posterior, a Dra. Fernanda nega qualquer ação. Não há como provar o contrário.</p>`,
+            pergunta: `Qual é a <strong>letra do STRIDE</strong> que descreve a ameaça de a Dra. Fernanda conseguir NEGAR ter deletado a anotação por falta de registros?`,
+            dica: `Ela pode NEGAR porque não há prova. Qual letra do STRIDE é sobre NEGAÇÃO de ações?`
+        },
+        stride4: {
+            conceito: `<strong>Information Disclosure</strong> é a exposição de dados sigilosos a quem não deveria ter acesso. Pode ser direta ou indireta (resposta diferente revelando dados). O controle é <strong>respostas genéricas + tratamento de erros</strong>.`,
+            cenario: `<p>Na tela "Esqueci a senha" do MedConsulta, o sistema responde diferente conforme o email existe ou não: email inexistente → <em>"Este email não está cadastrado."</em> — email existente → <em>"Email encontrado! Verifique sua caixa de entrada."</em>. Um atacante automatiza buscas e descobre quais emails têm conta — informação sensível por indicar quem usa uma plataforma médica.</p>`,
+            pergunta: `Qual é a <strong>letra do STRIDE</strong> que representa a ameaça de o sistema revelar INDIRETAMENTE quais emails estão cadastrados?`,
+            dica: `A diferença de resposta revela uma informação. Qual letra é sobre EXPOSIÇÃO de informações?`
+        },
+        stride5: {
+            conceito: `<strong>Denial of Service</strong> é tornar um sistema indisponível para usuários legítimos por sobrecarga ou consumo de recursos. O controle é <strong>rate limiting, WAF e infraestrutura resiliente</strong>.`,
+            cenario: `<p>O MedConsulta cria um slot por horário: <code>/agendar/slot/20241215-09h00/dr-carlos</code>. Um robô cria contas falsas e agenda automaticamente TODOS os horários dos próximos 6 meses. Pacientes reais não encontram nenhuma vaga. Os médicos ficam com agenda cheia de consultas fantasmas.</p>`,
+            pergunta: `Qual é a <strong>letra do STRIDE</strong> que representa a ameaça de tornar os horários de agendamento INDISPONÍVEIS para pacientes legítimos?`,
+            dica: `Os slots ficaram indisponíveis. Qual letra do STRIDE é sobre DISPONIBILIDADE negada?`
+        },
+        stride6: {
+            conceito: `<strong>Elevation of Privilege</strong> é quando um usuário obtém permissões além das concedidas. O controle é <strong>verificação de autorização sempre no servidor</strong>, nunca só no cliente.`,
+            cenario: `<p>O MedConsulta tem perfis Paciente, Médico e Admin. O painel admin valida: <code>SELECT * FROM usuarios WHERE id=$1 AND perfil='admin'</code>. Porém, uma rota legada <code>/admin-legacy</code> só verifica <code>SELECT * FROM usuarios WHERE id=$1</code> (sem checar perfil). Um paciente acessa <code>/admin-legacy</code> e obtém controle total do painel administrativo.</p>`,
+            pergunta: `Qual é a <strong>letra do STRIDE</strong> que representa a ameaça de um paciente GANHAR poderes de administrador sem autorização?`,
+            dica: `O usuário "subiu de nível" sem permissão. Qual letra é sobre ESCALADA de privilégios?`
+        },
+        stride7: {
+            conceito: `Uma <strong>fronteira de confiança (trust boundary)</strong> separa o que você controla do que NÃO controla. Cruzá-la exige verificação extra: autenticação mútua, validação de entrada e TLS.`,
+            cenario: `<p>O time do MedConsulta mapeia os componentes do sistema:</p>
+<pre style="background:#f5f5f5;padding:10px;border-radius:4px;font-size:11px;overflow:auto;">
+[Navegador do Paciente/Médico]
+         | HTTPS/TLS
+[Portal Web MedConsulta]
+         | API REST interna
+[Serviço de Prontuários]
+         | Webhook / API REST
+[LabExames Ltda. — laboratório terceirizado que envia resultados de exames]
+         | Callback de confirmação
+[Serviço de Prontuários]
+</pre>
+<p>A fronteira mais crítica separa os sistemas internos do MedConsulta de um componente <strong>externo que não controlamos</strong> — e que, se comprometido, poderia injetar resultados de exames falsos nos prontuários dos pacientes.</p>`,
+            pergunta: `Qual é o nome <strong>exato</strong> do componente externo (terceirizado) no diagrama com o qual o MedConsulta tem a fronteira de confiança mais crítica?`,
+            dica: `Procure no diagrama o componente que NÃO pertence ao MedConsulta — aquele que nenhum dev da empresa controla.`
+        },
+        stride8: {
+            conceito: `Cada categoria STRIDE tem <strong>controles específicos</strong>: Spoofing → autenticação forte; Tampering → assinaturas; Repudiation → logs imutáveis; Info Disclosure → criptografia; DoS → rate limiting; EoP → autorização server-side.`,
+            cenario: `<p>O threat model do MedConsulta identificou: <em>"Médicos podem editar ou deletar anotações em prontuários sem deixar rastro — impossibilitando auditorias e conformidade com a LGPD."</em> A mitigação proposta: registrar automaticamente, em tabela separada e imutável, <strong>toda operação em prontuários</strong>: quem acessou, quando, o que foi lido/criado/editado/deletado e os dados antes e depois.</p>`,
+            pergunta: `Como é chamado (em <strong>português</strong>) o controle de segurança descrito acima, que registra detalhadamente todas as ações realizadas no sistema?`,
+            dica: `Em inglês seria "audit log". Responda em português: "log de ___".`
+        },
+        stride9: {
+            conceito: `Na priorização, ameaças que afetam <strong>MUITOS usuários sem precisar de privilégios especiais</strong> são geralmente as mais críticas — alto impacto × exploração acessível.`,
+            cenario: `<p>O MedConsulta identificou 3 ameaças:</p>
+<ul style="font-size:12px;line-height:1.8;padding-left:18px;">
+<li><strong>A)</strong> Um médico pode deletar anotações em prontuários sem registro — nenhum paciente sabe que seus dados foram alterados.</li>
+<li><strong>B)</strong> Qualquer paciente logado pode acessar o prontuário de outro trocando o número na URL: <code>/prontuario/1234</code> → <code>/prontuario/1235</code> — sem precisar de nenhum privilégio especial.</li>
+<li><strong>C)</strong> A página de erro revela a versão do framework e do servidor usados pelo MedConsulta.</li>
+</ul>
+<p>Qual ameaça causa o maior risco de exposição de dados de <strong>muitos pacientes simultaneamente</strong>?</p>`,
+            pergunta: `Qual é a <strong>letra (A, B ou C)</strong> da ameaça que representa o maior risco de exposição massiva de dados de pacientes?`,
+            dica: `Qual ameaça pode ser explorada por QUALQUER paciente logado, sem privilégios, para acessar dados de QUALQUER outro paciente?`
+        },
+        stride10: {
+            conceito: `Um <strong>documento de threat model</strong> descreve o sistema, seus ativos, atores, fluxos de dados e ameaças STRIDE com controles. Recebe um código de revisão para rastreabilidade.`,
+            cenario: `<p>O MedConsulta vai lançar <strong>Telemedicina</strong>. O fluxo:</p>
+<ol style="font-size:12px;line-height:1.8;padding-left:18px;">
+<li>Paciente solicita consulta online</li>
+<li>Sistema encontra médico: <code>/telemedicina/match?especialidade=cardiologia&amp;plano=basico</code> — <strong>sem autenticação</strong></li>
+<li>Videochamada via <strong>VideoMed S.A.</strong> (terceiro) com token na URL: <code>/videomed?token=abc123</code></li>
+<li>Médico emite laudo: <code>/laudos/criar?consulta_id=XXX</code> — sem validar se é o médico correto</li>
+</ol>
+<p>A equipe identificou: (1) <code>/telemedicina/match</code> expõe dados de todos os médicos sem login → <strong>Information Disclosure</strong>; (2) tokens na URL ficam em logs do servidor → <strong>Information Disclosure</strong>; (3) qualquer médico cria laudo de qualquer consulta → <strong>Tampering</strong>. O documento de threat model recebeu o código de revisão <strong>REV-MEDCON-4419</strong>.</p>`,
+            pergunta: `Qual é o <strong>código de revisão</strong> atribuído ao threat model da funcionalidade de Telemedicina do MedConsulta?`,
+            dica: `O código está no texto do cenário — procure por "REV-".`
+        }
+    }
+};
+
+const testesStride = [
+    { id: 'stride1',  nome: '1️⃣ S — Spoofing',               letra: 'S' },
+    { id: 'stride2',  nome: '2️⃣ T — Tampering',              letra: 'T' },
+    { id: 'stride3',  nome: '3️⃣ R — Repudiation',            letra: 'R' },
+    { id: 'stride4',  nome: '4️⃣ I — Information Disclosure', letra: 'I' },
+    { id: 'stride5',  nome: '5️⃣ D — Denial of Service',      letra: 'D' },
+    { id: 'stride6',  nome: '6️⃣ E — Elevation of Privilege', letra: 'E' },
+    { id: 'stride7',  nome: '7️⃣ Fronteira de Confiança',     letra: null },
+    { id: 'stride8',  nome: '8️⃣ Controle de Mitigação',      letra: null },
+    { id: 'stride9',  nome: '9️⃣ Priorização de Risco',       letra: null },
+    { id: 'stride10', nome: '🔟 Threat Model Completo',       letra: null }
+];
+
+// Respostas aceitas (arrays permitem variantes normalizadas da mesma resposta).
+const RESPOSTAS_STRIDE = {
+    '1': {
+        stride1:  ['s', 'spoofing', 'falsificacao', 'falsificacao de identidade'],
+        stride2:  ['t', 'tampering', 'adulteracao', 'adulteracao de dados'],
+        stride3:  ['r', 'repudiation', 'repudio'],
+        stride4:  ['i', 'information disclosure', 'divulgacao de informacoes', 'divulgacao'],
+        stride5:  ['d', 'denial of service', 'negacao de servico', 'dos'],
+        stride6:  ['e', 'elevation of privilege', 'elevacao de privilegio', 'escalada de privilegio', 'elevacao'],
+        stride7:  ['antifraude sa', 'antifraude s a', 'antifraude'],
+        stride8:  ['mfa', 'autenticacao multifator', 'autenticacao de dois fatores', '2fa', 'segundo fator'],
+        stride9:  ['a'],
+        stride10: ['rev-bancop-7742', 'revbancop7742', 'bancop7742']
+    },
+    '2': {
+        stride1:  ['s', 'spoofing', 'falsificacao', 'falsificacao de identidade'],
+        stride2:  ['t', 'tampering', 'adulteracao', 'adulteracao de dados'],
+        stride3:  ['r', 'repudiation', 'repudio'],
+        stride4:  ['i', 'information disclosure', 'divulgacao de informacoes', 'divulgacao'],
+        stride5:  ['d', 'denial of service', 'negacao de servico', 'dos'],
+        stride6:  ['e', 'elevation of privilege', 'elevacao de privilegio', 'escalada de privilegio', 'elevacao'],
+        stride7:  ['labexames ltda', 'labexames'],
+        stride8:  ['log de auditoria', 'logs de auditoria', 'trilha de auditoria', 'audit log', 'auditoria'],
+        stride9:  ['b'],
+        stride10: ['rev-medcon-4419', 'revmedcon4419', 'medcon4419']
+    }
+};
+
+function normalizarRespostaStride(s) {
+    return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+const LETRA_COR_STRIDE = { S:'#DC2626', T:'#D97706', R:'#7C3AED', I:'#2563EB', D:'#374151', E:'#059669' };
+
+function renderMenuStride(sala) {
+    const conteudoSala = CONTEUDO_STRIDE[sala];
+    let menu = '';
+    testesStride.forEach(teste => {
+        const ex = conteudoSala[teste.id];
+        const cor = teste.letra ? (LETRA_COR_STRIDE[teste.letra] || '#4338CA') : '#4338CA';
+        const badge = teste.letra
+            ? `<span style="display:inline-block;margin-left:6px;padding:1px 6px;background:${cor};color:white;border-radius:3px;font-size:10px;font-weight:bold;">${teste.letra}</span>`
+            : '';
+        menu += `
+            <div class="teste-item">
+                <a href="javascript:void(0)" class="teste-link" id="link-${teste.id}" onclick="toggleTesteStride('${teste.id}')">
+                    <strong style="font-size:12px;" id="titulo-${teste.id}">${teste.nome}</strong>${badge}
+                </a>
+                <div class="teste-panel" id="panel-${teste.id}">
+                    <div style="background:#eef2ff;border-left:3px solid #4338CA;padding:8px;margin-bottom:10px;font-size:11px;color:#1e1b4b;line-height:1.5;">
+                        <strong>📚 Conceito:</strong> ${ex.conceito}
+                    </div>
+                    <div style="font-size:12px;color:#333;margin-bottom:10px;line-height:1.6;">
+                        <strong>📍 Cenário:</strong><br>${ex.cenario}
+                    </div>
+                    <div style="background:white;border:1px solid #4338CA;border-radius:4px;padding:10px;margin-top:10px;">
+                        <p style="margin:0 0 6px 0;font-size:12px;font-weight:bold;color:#333;">${ex.pergunta}</p>
+                        <p style="margin:0 0 8px 0;font-size:11px;color:#666;">💡 <em>${ex.dica}</em></p>
+                        <input type="text" id="resposta-${teste.id}" placeholder="Digite sua resposta aqui..." style="width:100%;padding:8px;margin-bottom:8px;border:1px solid #ccc;border-radius:4px;box-sizing:border-box;font-size:12px;">
+                        <button onclick="validarTesteStride('${teste.id}')" style="width:100%;padding:8px;background:#4338CA;color:white;border:none;border-radius:4px;font-weight:bold;cursor:pointer;font-size:12px;">✅ Validar Resposta</button>
+                        <p id="feedback-${teste.id}" style="margin:8px 0 0 0;font-size:11px;"></p>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    return menu;
+}
+
+const sidebarStyleStride = `
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family: sans-serif; background: white; }
+    .container { display:flex; min-height:100vh; }
+    .sidebar { width:320px; background:#f5f5f5; padding:20px; overflow-y:auto; border-right:2px solid #ddd; }
+    .main { flex:1; padding:30px; overflow-y:auto; background:white; }
+    .sidebar h2 { margin-top:0; margin-bottom:6px; color:#333; font-size:15px; }
+    .sidebar p { font-size:12px; color:#666; margin-bottom:15px; }
+    .teste-item { margin:7px 0; }
+    .teste-link { display:block; padding:10px; border-radius:4px; text-decoration:none; background:#f9f9f9; border:1px solid #ddd; color:#333; cursor:pointer; transition:all 0.2s; }
+    .teste-link.active { background:#4338CA; color:white; border:2px solid #3730A3; }
+    .teste-link.concluido { border-left:4px solid #28a745; }
+    .teste-panel { display:none; background:#f0f0ff; padding:12px; border-radius:4px; margin-top:6px; border-left:4px solid #4338CA; }
+    .teste-panel.open { display:block; }
+    .reset-btn { display:block; width:100%; text-align:center; padding:10px; background:#6c757d; color:white; border:none; border-radius:4px; margin-top:18px; font-weight:bold; cursor:pointer; font-size:13px; }
+    .nav-link { display:block; text-align:center; padding:10px; background:#6c757d; color:white; text-decoration:none; border-radius:4px; margin-top:10px; font-size:13px; }
+`;
+
+const scriptAccordionStride = `
+    let testeAbertoStride = null;
+
+    function toggleTesteStride(id) {
+        const painelNovo = document.getElementById('panel-' + id);
+        const linkNovo   = document.getElementById('link-' + id);
+        const reabrindo  = testeAbertoStride === id;
+        if (testeAbertoStride) {
+            document.getElementById('panel-' + testeAbertoStride).classList.remove('open');
+            document.getElementById('link-'  + testeAbertoStride).classList.remove('active');
+        }
+        if (reabrindo) {
+            testeAbertoStride = null;
+        } else {
+            painelNovo.classList.add('open');
+            linkNovo.classList.add('active');
+            testeAbertoStride = id;
+        }
+    }
+
+    function atualizarContadorStride(total) {
+        const c = document.getElementById('contador-progresso');
+        if (c) c.textContent = total + ' / 10 concluídos';
+    }
+
+    function marcarConcluidoStride(id) {
+        const link  = document.getElementById('link-'  + id);
+        const titulo = document.getElementById('titulo-' + id);
+        if (link)  link.classList.add('concluido');
+        if (titulo && titulo.textContent.indexOf('✅') === -1)
+            titulo.textContent = '✅ ' + titulo.textContent;
+    }
+
+    function desmarcarTodosStride() {
+        document.querySelectorAll('.teste-link.concluido').forEach(el => el.classList.remove('concluido'));
+        document.querySelectorAll('[id^="titulo-stride"]').forEach(el => {
+            el.textContent = el.textContent.replace('✅ ', '');
+        });
+    }
+
+    async function carregarProgressoDoServidorStride(sala) {
+        try {
+            const r  = await fetch('/stride/' + sala + '/progresso');
+            const res = await r.json();
+            desmarcarTodosStride();
+            (res.concluidos || []).forEach(marcarConcluidoStride);
+            atualizarContadorStride((res.concluidos || []).length);
+        } catch (err) { console.error('Erro ao carregar progresso:', err.message); }
+    }
+
+    async function validarTesteStride(id) {
+        const sala     = window.SALA_ATUAL;
+        const input    = document.getElementById('resposta-'  + id);
+        const feedback = document.getElementById('feedback-' + id);
+        try {
+            const r = await fetch('/stride/' + sala + '/validar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ testeId: id, resposta: input.value })
+            });
+            const res = await r.json();
+            if (res.correto) {
+                feedback.textContent = '✅ Correto! Exercício concluído.';
+                feedback.style.color = '#28a745';
+                await carregarProgressoDoServidorStride(sala);
+            } else {
+                feedback.textContent = '❌ Ainda não é isso. Revise o cenário e tente novamente.';
+                feedback.style.color = '#dc3545';
+            }
+        } catch (err) {
+            feedback.textContent = '❌ Erro ao validar: ' + err.message;
+            feedback.style.color = '#dc3545';
+        }
+    }
+
+    async function resetarProgressoStride(sala) {
+        if (!confirm('⚠️ Isso vai zerar o progresso dos 10 exercícios do Lab ' + sala + ' de STRIDE. Continuar?')) return;
+        try {
+            const r  = await fetch('/stride/' + sala + '/reset', { method: 'POST' });
+            const res = await r.json();
+            alert(res.mensagem || res.erro);
+            window.location.reload();
+        } catch (err) { alert('❌ Erro ao resetar: ' + err.message); }
+    }
+`;
+
+const CREDENCIAIS_STRIDE = {
+    'sala-a': { senha: 'stride-a', sala: '1', nomeExibicao: 'Sala A' },
+    'sala-b': { senha: 'b-stride', sala: '2', nomeExibicao: 'Sala B' }
+};
+
+app.get('/stride', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'stride-login.html'));
+});
+
+app.post('/stride/login', (req, res) => {
+    const usuario = String(req.body.usuario || '').trim().toLowerCase();
+    const senha   = String(req.body.senha   || '');
+    const conta   = CREDENCIAIS_STRIDE[usuario];
+    if (!conta || conta.senha !== senha) return res.redirect('/stride?erro=1');
+    req.session.strideSala = conta.sala;
+    req.session.strideNome = conta.nomeExibicao;
+    res.redirect('/stride/' + conta.sala);
+});
+
+app.get('/stride/logout', (req, res) => {
+    req.session.strideSala = null;
+    req.session.strideNome = null;
+    res.redirect('/stride');
+});
+
+function exigirLoginStride(req, res, next) {
+    if (req.session.strideSala && req.session.strideSala === req.params.sala) return next();
+    res.redirect('/stride');
+}
+
+// Painel do professor — deve ficar ANTES de /stride/:sala para não ser capturado como valor de :sala
+app.get('/stride/painel-professor/dados', async (req, res) => {
+    try {
+        const r = await pool.query('SELECT sala, teste_id, concluido_em FROM stride_progresso');
+        const concluidos = {};
+        r.rows.forEach(row => { concluidos[row.sala + ':' + row.teste_id] = row.concluido_em; });
+        res.json({ concluidos });
+    } catch (err) { res.status(500).json({ erro: err.message }); }
+});
+
+app.get('/stride/painel-professor', async (req, res) => {
+    try {
+        const r = await pool.query('SELECT sala, teste_id, concluido_em FROM stride_progresso');
+        const concluidos = {};
+        r.rows.forEach(row => { concluidos[row.sala + ':' + row.teste_id] = row.concluido_em; });
+
+        const celula = (testeId, salaId) => {
+            const ts = concluidos[salaId + ':' + testeId];
+            if (ts) return `<td id="cel-${salaId}-${testeId}" style="padding:8px;border:1px solid #ddd;text-align:center;background:#d4edda;">✅<br><small style="color:#666;">${new Date(ts).toLocaleString('pt-BR')}</small></td>`;
+            return `<td id="cel-${salaId}-${testeId}" style="padding:8px;border:1px solid #ddd;text-align:center;background:#f8d7da;color:#721c24;">❌</td>`;
+        };
+
+        const linhas = testesStride.map(t => `
+            <tr>
+                <td style="padding:8px;border:1px solid #ddd;">${t.nome}</td>
+                ${celula(t.id,'1')}${celula(t.id,'2')}
+            </tr>`).join('');
+
+        const totalA = Object.keys(concluidos).filter(k => k.startsWith('1:')).length;
+        const totalB = Object.keys(concluidos).filter(k => k.startsWith('2:')).length;
+
+        res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+            <title>Painel do Professor — STRIDE</title></head>
+            <body style="font-family:sans-serif;max-width:900px;margin:40px auto;padding:20px;">
+            <h2>🧑‍🏫 Painel do Professor — Lab STRIDE: Modelagem de Ameaças</h2>
+            <p style="color:#666;">Esta página não tem link em nenhum menu — só quem conhece o endereço acessa.
+                <span id="status-auto-atualizar" style="color:#4338CA;">🟢 Atualizando automaticamente...</span></p>
+            <div style="display:flex;gap:15px;margin-bottom:20px;">
+                <div style="flex:1;background:#eef2ff;border-left:4px solid #4338CA;padding:15px;border-radius:4px;">
+                    <strong>Sala A</strong> (BancoPix) — <span id="contador-sala-1">${totalA}</span> / 10 concluídos
+                </div>
+                <div style="flex:1;background:#eef2ff;border-left:4px solid #4338CA;padding:15px;border-radius:4px;">
+                    <strong>Sala B</strong> (MedConsulta) — <span id="contador-sala-2">${totalB}</span> / 10 concluídos
+                </div>
+            </div>
+            <table style="width:100%;border-collapse:collapse;">
+                <thead><tr style="background:#4338CA;color:white;">
+                    <th style="padding:10px;border:1px solid #3730A3;text-align:left;">Exercício</th>
+                    <th style="padding:10px;border:1px solid #3730A3;">Sala A</th>
+                    <th style="padding:10px;border:1px solid #3730A3;">Sala B</th>
+                </tr></thead>
+                <tbody>${linhas}</tbody>
+            </table>
+            <div style="margin-top:20px;display:flex;gap:10px;">
+                <form action="/stride/painel-professor/limpar/1" method="POST" onsubmit="return confirm('Limpar progresso da Sala A?');">
+                    <button type="submit" style="padding:10px 16px;background:#6c757d;color:white;border:none;border-radius:4px;cursor:pointer;">🧹 Limpar Sala A</button>
+                </form>
+                <form action="/stride/painel-professor/limpar/2" method="POST" onsubmit="return confirm('Limpar progresso da Sala B?');">
+                    <button type="submit" style="padding:10px 16px;background:#6c757d;color:white;border:none;border-radius:4px;cursor:pointer;">🧹 Limpar Sala B</button>
+                </form>
+            </div>
+            <script>
+                const TESTES_IDS_STRIDE = ${JSON.stringify(testesStride.map(t => t.id))};
+                async function atualizarPainelStride() {
+                    try {
+                        const res = await fetch('/stride/painel-professor/dados');
+                        const dados = await res.json();
+                        const concluidos = dados.concluidos || {};
+                        ['1','2'].forEach(salaId => {
+                            let total = 0;
+                            TESTES_IDS_STRIDE.forEach(testeId => {
+                                const cel = document.getElementById('cel-' + salaId + '-' + testeId);
+                                if (!cel) return;
+                                const ts = concluidos[salaId + ':' + testeId];
+                                if (ts) {
+                                    total++;
+                                    if (cel.dataset.concluidoEm !== ts) {
+                                        cel.style.background = '#d4edda';
+                                        cel.style.color = '';
+                                        cel.innerHTML = '✅<br><small style="color:#666;">' + new Date(ts).toLocaleString('pt-BR') + '</small>';
+                                        cel.dataset.concluidoEm = ts;
+                                    }
+                                } else if (cel.dataset.concluidoEm) {
+                                    cel.style.background = '#f8d7da';
+                                    cel.style.color = '#721c24';
+                                    cel.innerHTML = '❌';
+                                    delete cel.dataset.concluidoEm;
+                                }
+                            });
+                            const cnt = document.getElementById('contador-sala-' + salaId);
+                            if (cnt) cnt.textContent = total;
+                        });
+                        document.getElementById('status-auto-atualizar').textContent = '🟢 Atualizando automaticamente...';
+                    } catch(err) {
+                        document.getElementById('status-auto-atualizar').textContent = '🔴 Falha: ' + err.message;
+                    }
+                }
+                setInterval(atualizarPainelStride, 5000);
+            </script>
+            </body></html>`);
+    } catch (err) {
+        res.status(500).send(`<p style="color:red;font-family:sans-serif;">❌ Erro: ${escapeHtml(err.message)}</p>`);
+    }
+});
+
+app.post('/stride/painel-professor/limpar/:sala', async (req, res) => {
+    try {
+        await pool.query('DELETE FROM stride_progresso WHERE sala=$1', [req.params.sala]);
+        res.redirect('/stride/painel-professor');
+    } catch (err) {
+        res.status(500).send(`<p style="color:red;font-family:sans-serif;">❌ Erro: ${escapeHtml(err.message)}</p>`);
+    }
+});
+
+// Dashboard do lab (menu lateral com os 10 exercícios + tabela de referência STRIDE)
+app.get('/stride/:sala', exigirLoginStride, (req, res) => {
+    const { sala } = req.params;
+    const ctx = CONTEUDO_STRIDE[sala];
+    res.send(`<!DOCTYPE html><html><head>
+        <meta charset="UTF-8">
+        <title>Lab STRIDE — ${escapeHtml(ctx.nomeSistema)}</title>
+        <style>${sidebarStyleStride}</style>
+    </head><body>
+    <div class="container">
+        <div class="sidebar">
+            <h2>🗺️ Threat Modeling — STRIDE</h2>
+            <p>Sistema: <strong>${escapeHtml(ctx.nomeSistema)}</strong></p>
+            <p id="contador-progresso" style="font-weight:bold;color:#4338CA;">0 / 10 concluídos</p>
+            ${renderMenuStride(sala)}
+            <button class="reset-btn" onclick="resetarProgressoStride('${sala}')">🔄 Resetar Progresso</button>
+            <a href="/stride/logout" class="nav-link">🚪 Sair do Lab</a>
+            <a href="/" class="nav-link">← Voltar ao Hub</a>
+        </div>
+        <div class="main">
+            <div style="background:linear-gradient(135deg,#4338CA,#3730A3);color:white;padding:20px;border-radius:8px;margin-bottom:20px;">
+                <h2 style="margin:0 0 6px 0;">🗺️ Threat Modeling — STRIDE</h2>
+                <p style="margin:0;opacity:0.85;font-size:13px;">Sistema: <strong>${escapeHtml(ctx.nomeSistema)}</strong> — ${escapeHtml(ctx.descSistema)}</p>
+            </div>
+            <div style="background:#f8f9ff;border:1px solid #c7d2fe;border-radius:8px;padding:16px;margin-bottom:20px;">
+                <h3 style="margin:0 0 12px 0;font-size:14px;color:#3730A3;">📋 Framework STRIDE — Referência Rápida</h3>
+                <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                    <tr style="background:#4338CA;color:white;">
+                        <th style="padding:8px;text-align:center;width:36px;">✦</th>
+                        <th style="padding:8px;text-align:left;">Categoria</th>
+                        <th style="padding:8px;text-align:left;">O que é?</th>
+                        <th style="padding:8px;text-align:left;">Controle principal</th>
+                    </tr>
+                    <tr style="background:#fef2f2;">
+                        <td style="padding:8px;text-align:center;font-weight:bold;color:#DC2626;">S</td>
+                        <td style="padding:8px;">Spoofing</td>
+                        <td style="padding:8px;">Fingir ser outro usuário ou sistema</td>
+                        <td style="padding:8px;">Autenticação forte (MFA)</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:8px;text-align:center;font-weight:bold;color:#D97706;">T</td>
+                        <td style="padding:8px;">Tampering</td>
+                        <td style="padding:8px;">Modificar dados sem autorização</td>
+                        <td style="padding:8px;">Assinaturas digitais, validação server-side</td>
+                    </tr>
+                    <tr style="background:#faf5ff;">
+                        <td style="padding:8px;text-align:center;font-weight:bold;color:#7C3AED;">R</td>
+                        <td style="padding:8px;">Repudiation</td>
+                        <td style="padding:8px;">Negar ter realizado uma ação</td>
+                        <td style="padding:8px;">Logs de auditoria imutáveis</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:8px;text-align:center;font-weight:bold;color:#2563EB;">I</td>
+                        <td style="padding:8px;">Information Disclosure</td>
+                        <td style="padding:8px;">Expor dados sigilosos indevidamente</td>
+                        <td style="padding:8px;">Criptografia, tratamento de erros genérico</td>
+                    </tr>
+                    <tr style="background:#f9fafb;">
+                        <td style="padding:8px;text-align:center;font-weight:bold;color:#374151;">D</td>
+                        <td style="padding:8px;">Denial of Service</td>
+                        <td style="padding:8px;">Tornar o sistema indisponível</td>
+                        <td style="padding:8px;">Rate limiting, redundância, WAF</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:8px;text-align:center;font-weight:bold;color:#059669;">E</td>
+                        <td style="padding:8px;">Elevation of Privilege</td>
+                        <td style="padding:8px;">Obter permissões indevidas</td>
+                        <td style="padding:8px;">Autorização server-side, least privilege</td>
+                    </tr>
+                </table>
+            </div>
+            <div style="background:#fef3c7;border-left:4px solid #F59E0B;padding:14px;border-radius:4px;font-size:13px;color:#78350F;">
+                <strong>📖 Como usar:</strong> Clique em cada exercício na barra lateral. Os exercícios 1–6 pedem para identificar a letra do STRIDE no cenário apresentado. Os exercícios 7–10 aplicam os conceitos em situações reais do ${escapeHtml(ctx.nomeSistema)}. Sem ferramentas externas — só leitura, análise e resposta.
+            </div>
+        </div>
+    </div>
+    <script>
+        window.SALA_ATUAL = '${sala}';
+        ${scriptAccordionStride}
+        carregarProgressoDoServidorStride('${sala}');
+    </script>
+    </body></html>`);
+});
+
+app.get('/stride/:sala/progresso', exigirLoginStride, async (req, res) => {
+    const { sala } = req.params;
+    try {
+        const r = await pool.query('SELECT teste_id FROM stride_progresso WHERE sala=$1', [sala]);
+        res.json({ concluidos: r.rows.map(row => row.teste_id) });
+    } catch (err) { res.status(500).json({ erro: err.message }); }
+});
+
+app.post('/stride/:sala/validar', exigirLoginStride, async (req, res) => {
+    const { sala } = req.params;
+    const { testeId, resposta } = req.body;
+    const respostas = (RESPOSTAS_STRIDE[sala] || {})[testeId];
+    if (!respostas) return res.status(400).json({ correto: false, erro: 'Exercício desconhecido' });
+
+    const normalizada = normalizarRespostaStride(resposta);
+    const correto = Array.isArray(respostas)
+        ? respostas.some(r => normalizarRespostaStride(r) === normalizada)
+        : normalizarRespostaStride(respostas) === normalizada;
+
+    if (correto) {
+        try {
+            await pool.query(
+                'INSERT INTO stride_progresso (sala, teste_id) VALUES ($1,$2) ON CONFLICT (sala, teste_id) DO UPDATE SET concluido_em = NOW()',
+                [sala, testeId]
+            );
+        } catch (err) { console.error('Erro ao registrar progresso STRIDE:', err.message); }
+    }
+    res.json({ correto });
+});
+
+app.post('/stride/:sala/reset', exigirLoginStride, async (req, res) => {
+    const { sala } = req.params;
+    try {
+        await pool.query('DELETE FROM stride_progresso WHERE sala=$1', [sala]);
+        res.json({ sucesso: true, mensagem: `✅ Progresso do Lab ${sala} de STRIDE resetado com sucesso!` });
+    } catch (err) { res.status(500).json({ sucesso: false, erro: err.message }); }
+});
+
 // Inicialização da porta dinâmica (Render ou Local)
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🔥 Servidor do Laboratório iniciado com sucesso na porta ${PORT}`));
