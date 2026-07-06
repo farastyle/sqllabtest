@@ -2865,7 +2865,7 @@ function renderExerciciosStride(aluno) {
             <div class="exercise-card" id="card-${teste.id}">
                 <div class="card-meta">
                     <span class="badge-sistema ${badgeClasse}">${ex.emoji} ${ex.sistema}</span>
-                    <span class="badge-num">Exercício ${idx + 1} de 10</span>
+                    <span class="badge-num">Exercício ${idx + 1} de 15</span>
                     <span class="badge-check" id="check-${teste.id}">⬜</span>
                 </div>
                 <div class="cenario-box">${ex.cenario}</div>
@@ -3364,6 +3364,53 @@ const ITEMS_DRAG_SUP8 = [
     { id: 'l', texto: 'Documentação interna não publicada na internet', correto: 'nao' }
 ];
 
+// Dados para os exercícios 11-15 (interativos)
+const ITEMS_MAP_SUP11 = [
+    { id: 'lb',   emoji: '⚖️', nome: 'Load Balancer',                zona: 'ext', correto: true  },
+    { id: 'app',  emoji: '🖥️', nome: 'App Server (Node.js)',         zona: 'ext', correto: true  },
+    { id: 'api',  emoji: '🔗', nome: 'API Pagamentos (parceiro)',     zona: 'ext', correto: false },
+    { id: 'db',   emoji: '🗄️', nome: 'Banco de Dados PostgreSQL',    zona: 'int', correto: false },
+    { id: 'log',  emoji: '📊', nome: 'Servidor de Logs',             zona: 'int', correto: false },
+    { id: 'cache',emoji: '⚡', nome: 'Cache Redis',                  zona: 'int', correto: false },
+    { id: 'nfs',  emoji: '📁', nome: 'Servidor de Arquivos (NFS)',    zona: 'int', correto: false },
+];
+
+const PASSOS_SUP12 = [
+    { id: 'a', texto: '📋 Levantar os componentes do sistema (inventário completo)' },
+    { id: 'b', texto: '🚪 Identificar pontos de entrada — formulários, APIs, parâmetros de URL' },
+    { id: 'c', texto: '🔐 Verificar quais pontos requerem autenticação' },
+    { id: 'd', texto: '⚠️ Classificar cada ponto por nível de risco' },
+    { id: 'e', texto: '📄 Documentar a superfície mapeada no relatório' },
+];
+const ORDEM_CORRETA_SUP12 = ['a', 'b', 'c', 'd', 'e'];
+
+const STORIES_SUP13 = [
+    { id: 'a', tag: 'US-14', texto: 'Como usuário, quero fazer upload de comprovante de pagamento.', correto: true  },
+    { id: 'b', tag: 'US-15', texto: 'Como desenvolvedor, quero refatorar a função de cálculo de desconto (lógica interna).', correto: false },
+    { id: 'c', tag: 'US-16', texto: 'Como admin, quero ter um painel para visualizar logs de acesso de usuários.', correto: true  },
+    { id: 'd', tag: 'US-17', texto: 'Como usuário, quero receber notificações por e-mail ao finalizar uma compra.', correto: false },
+    { id: 'e', tag: 'US-18', texto: 'Como sistema, quero integrar com a API do Google Calendar para sincronizar agenda.', correto: true  },
+    { id: 'f', tag: 'US-19', texto: 'Como time, quero migrar o banco de dados para um servidor interno com mais memória.', correto: false },
+];
+
+const HOTSPOTS_SUP14 = [
+    { id: 'search',  correto: true  },
+    { id: 'login',   correto: true  },
+    { id: 'admin',   correto: true  },
+    { id: 'filter',  correto: true  },
+    { id: 'form',    correto: true  },
+    { id: 'logo',    correto: false },
+    { id: 'listing', correto: false },
+    { id: 'copy',    correto: false },
+];
+
+const BLANKS_SUP15 = [
+    { id: 'b1', opcoes: ['3', '5', '8'],           correto: '5'                                        },
+    { id: 'b2', opcoes: ['1', '2', '3'],            correto: '2'                                        },
+    { id: 'b3', opcoes: ['upload de comprovantes', 'painel admin', 'API de transferência'], correto: 'painel admin' },
+    { id: 'b4', opcoes: ['adicionar MFA na API', 'desativar o painel admin', 'aumentar o timeout'], correto: 'desativar o painel admin' },
+];
+
 const CONTEUDO_SUPERFICIE = {
     sup1: {
         fase: 'observacao', faseLbl: 'Observação', nivel: '🟢',
@@ -3502,6 +3549,50 @@ https://app.bancoPix.com/extrato?<span style="color:#fbbf24;">conta</span>=33412
 </ul>`,
         pergunta: 'Qual opção <strong>reduz mais efetivamente</strong> a superfície de ataque? Responda <strong>A</strong> ou <strong>B</strong>.',
         dica: 'Consulte "Redução de Superfície" na barra lateral. Lembre: um endpoint que não existe não pode ser explorado.'
+    },
+    sup11: {
+        fase: 'ambiente', faseLbl: 'Ambiente', nivel: '🔴',
+        titulo: 'Exercício 11 — Mapa do Ambiente (Homologação)',
+        cenario: `<p>Você está conectado via VPN ao ambiente de homologação de um cliente. O diagrama abaixo mostra a infraestrutura completa. <strong>Do ponto de vista de um atacante externo</strong> — pela internet, sem VPN — identifique quais componentes fazem parte da superfície de ataque.</p>
+<p style="font-size:12px;margin-top:8px;color:#92400e;background:#fef3c7;padding:8px 10px;border-radius:5px;">⚠️ Atenção: a <strong>API de Pagamentos</strong> é de um parceiro terceirizado — não pertence ao cliente e está fora do escopo do teste.</p>`,
+        pergunta: 'Clique nos componentes que fazem parte da <strong>superfície de ataque do cliente</strong> (acessíveis externamente e dentro do escopo).',
+        dica: 'Componentes de terceiros (API de parceiro) não são responsabilidade do cliente — não entram no escopo. Rede interna não é superfície externa.'
+    },
+    sup12: {
+        fase: 'ambiente', faseLbl: 'Ambiente', nivel: '🔴',
+        titulo: 'Exercício 12 — Ordenar o Processo de Mapeamento',
+        cenario: `<p>Antes de qualquer análise de segurança, o testador mapeia a superfície de ataque seguindo uma ordem lógica. Os 5 passos abaixo estão <strong>embaralhados</strong>. Arraste para reordenar.</p>`,
+        pergunta: 'Arraste os passos para colocá-los na <strong>sequência correta</strong> do processo de mapeamento de superfície de ataque.',
+        dica: 'Você precisa saber o que existe antes de classificar; precisa classificar antes de documentar. Siga a lógica de descoberta → análise → registro.'
+    },
+    sup13: {
+        fase: 'ambiente', faseLbl: 'Ambiente', nivel: '🔴',
+        titulo: 'Exercício 13 — Sprint de Segurança',
+        cenario: `<p>O time está na sprint planning. Abaixo estão 6 user stories do backlog. Como integrante do time com foco em segurança, identifique quais histórias <strong>criam novos pontos na superfície de ataque</strong> — ou seja, abrem novos canais de entrada de dados externos no sistema.</p>`,
+        pergunta: 'Ative o toggle nas histórias que <strong>introduzem novos pontos na superfície de ataque</strong>.',
+        dica: 'Uma história cria superfície quando abre canal de entrada de dados externos. Mudanças em lógica interna ou notificações de saída não criam nova superfície.'
+    },
+    sup14: {
+        fase: 'ambiente', faseLbl: 'Ambiente', nivel: '🔴',
+        titulo: 'Exercício 14 — Tela em Análise',
+        cenario: `<p>A interface abaixo é de uma loja virtual que você está analisando. Identifique todos os elementos que aceitam entrada de dados — cada um é um ponto na superfície de ataque desta tela.</p>`,
+        pergunta: 'Clique em todos os <strong>elementos que aceitam dados</strong> do usuário nesta interface.',
+        dica: 'Um elemento é ponto de entrada se dados digitados ou selecionados são enviados ao servidor. Textos, imagens e listas estáticas (somente leitura) não são pontos de entrada.'
+    },
+    sup15: {
+        fase: 'ambiente', faseLbl: 'Ambiente', nivel: '🔴',
+        titulo: 'Exercício 15 — Completar o Relatório',
+        cenario: `<p>O BancoPix foi analisado e tem estes componentes:</p>
+<ul style="font-size:12px;line-height:2;padding-left:18px;margin:10px 0;">
+    <li>Página de login (sem MFA)</li>
+    <li>API de transferência (autenticada com token)</li>
+    <li>Endpoint de relatório financeiro (<strong>sem autenticação</strong>)</li>
+    <li>Endpoint de upload de comprovantes (autenticado)</li>
+    <li>Painel administrativo (<strong>sem autenticação</strong>)</li>
+</ul>
+<p style="font-size:12px;">Complete o relatório de superfície de ataque selecionando o valor correto em cada campo.</p>`,
+        pergunta: 'Selecione os valores corretos para completar o relatório.',
+        dica: 'Conte todos os componentes que aceitam entrada externa (são 5). Dos que estão sem autenticação: relatório financeiro e painel admin. Qual causa maior impacto?'
     }
 };
 
@@ -3515,7 +3606,12 @@ const RESPOSTAS_SUPERFICIE = {
     sup7:  'drag',
     sup8:  'drag',
     sup9:  ['5'],
-    sup10: ['b', 'b desativar', 'b remover', 'desativar', 'remover', 'opcao b', 'opção b']
+    sup10: ['b', 'b desativar', 'b remover', 'desativar', 'remover', 'opcao b', 'opção b'],
+    sup11: 'map',
+    sup12: 'ordem',
+    sup13: 'toggle',
+    sup14: 'hotspot',
+    sup15: 'blanks',
 };
 
 function normalizarRespostaSuperficie(s) {
@@ -3532,7 +3628,12 @@ const testesSuperficie = [
     { id: 'sup7',  nome: '7️⃣ Classificação — 6 Itens' },
     { id: 'sup8',  nome: '8️⃣ Classificação — 12 Itens' },
     { id: 'sup9',  nome: '9️⃣ Contando a Superfície' },
-    { id: 'sup10', nome: '🔟 Princípio de Redução' }
+    { id: 'sup10', nome: '🔟 Princípio de Redução' },
+    { id: 'sup11', nome: '11. Mapa do Ambiente' },
+    { id: 'sup12', nome: '12. Ordenar o Processo' },
+    { id: 'sup13', nome: '13. Sprint de Segurança' },
+    { id: 'sup14', nome: '14. Tela em Análise' },
+    { id: 'sup15', nome: '15. Completar o Relatório' },
 ];
 
 const ALUNOS_SUPERFICIE = [
@@ -3577,7 +3678,7 @@ function renderDragCard(teste, ex, idx, items) {
         <div class="exercise-card" id="card-${teste.id}">
             <div class="card-meta">
                 <span class="badge-fase" style="background:#DC262618;color:#DC2626;border:1px solid #DC262633;">${ex.nivel} ${ex.faseLbl}</span>
-                <span class="badge-num">Exercício ${idx + 1} de 10</span>
+                <span class="badge-num">Exercício ${idx + 1} de 15</span>
                 <span class="badge-check" id="check-${teste.id}">⬜</span>
             </div>
             <div class="card-titulo">${ex.titulo}</div>
@@ -3606,19 +3707,203 @@ function renderDragCard(teste, ex, idx, items) {
         </div>`;
 }
 
+function renderMapCard(teste, ex, idx) {
+    const extItems = ITEMS_MAP_SUP11.filter(i => i.zona === 'ext');
+    const intItems = ITEMS_MAP_SUP11.filter(i => i.zona === 'int');
+    const renderComp = (item) => `
+        <div class="map-comp" id="mapitem-${teste.id}-${item.id}" onclick="toggleMapItem('${teste.id}','${item.id}')">
+            <span class="map-emoji">${item.emoji}</span>
+            <span class="map-nome">${escapeHtml(item.nome)}</span>
+        </div>`;
+    return `
+        <div class="exercise-card" id="card-${teste.id}">
+            <div class="card-meta">
+                <span class="badge-fase" style="background:#0891B218;color:#0891B2;border:1px solid #0891B233;">${ex.nivel} ${ex.faseLbl}</span>
+                <span class="badge-num">Exercício ${idx + 1} de 15</span>
+                <span class="badge-check" id="check-${teste.id}">⬜</span>
+            </div>
+            <div class="card-titulo">${ex.titulo}</div>
+            <div class="cenario-box">${ex.cenario}</div>
+            <div class="pergunta-box">
+                <p class="pergunta-text">${ex.pergunta}</p>
+                <p class="dica-text">💡 ${ex.dica}</p>
+                <div class="env-map">
+                    <div class="env-zone env-zone--ext">
+                        <div class="env-zone-lbl">🌐 Zona Externa (acessível pela internet)</div>
+                        <div class="env-comps">${extItems.map(renderComp).join('')}</div>
+                    </div>
+                    <div class="env-arrow-sep">🔥 Firewall 🔥</div>
+                    <div class="env-zone env-zone--int">
+                        <div class="env-zone-lbl">🔒 Rede Interna (apenas via VPN)</div>
+                        <div class="env-comps">${intItems.map(renderComp).join('')}</div>
+                    </div>
+                </div>
+                <button class="validar-btn" onclick="validarMapa('${teste.id}')">✅ Validar Mapeamento</button>
+                <p class="feedback-text" id="fb-${teste.id}"></p>
+            </div>
+        </div>`;
+}
+
+function renderOrdemCard(teste, ex, idx, aluno) {
+    const passos = shuffleParaAluno([...PASSOS_SUP12], aluno + teste.id);
+    const itemsHtml = passos.map(p => `
+        <div class="ordem-item" id="ordemitem-${teste.id}-${p.id}" data-id="${p.id}" draggable="true"
+             ondragstart="ordemDragStart(event,'${p.id}')"
+             ondragover="ordemDragOver(event,'${teste.id}','${p.id}')"
+             ondragleave="ordemDragLeave(event)"
+             ondrop="ordemDrop(event,'${teste.id}','${p.id}')">
+            <span class="ordem-handle">⠿</span>
+            <span>${escapeHtml(p.texto)}</span>
+        </div>`).join('');
+    return `
+        <div class="exercise-card" id="card-${teste.id}">
+            <div class="card-meta">
+                <span class="badge-fase" style="background:#0891B218;color:#0891B2;border:1px solid #0891B233;">${ex.nivel} ${ex.faseLbl}</span>
+                <span class="badge-num">Exercício ${idx + 1} de 15</span>
+                <span class="badge-check" id="check-${teste.id}">⬜</span>
+            </div>
+            <div class="card-titulo">${ex.titulo}</div>
+            <div class="cenario-box">${ex.cenario}</div>
+            <div class="pergunta-box">
+                <p class="pergunta-text">${ex.pergunta}</p>
+                <p class="dica-text">💡 ${ex.dica}</p>
+                <div class="ordem-list" id="ordem-list-${teste.id}">${itemsHtml}</div>
+                <button class="validar-btn" onclick="validarOrdem('${teste.id}')">✅ Validar Sequência</button>
+                <p class="feedback-text" id="fb-${teste.id}"></p>
+            </div>
+        </div>`;
+}
+
+function renderToggleCard(teste, ex, idx) {
+    const storiesHtml = STORIES_SUP13.map(s => `
+        <div class="story-card">
+            <div class="story-header">
+                <span class="story-tag">${s.tag}</span>
+                <label class="toggle-sw">
+                    <input type="checkbox" id="toggle-${teste.id}-${s.id}">
+                    <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                </label>
+            </div>
+            <div class="story-text">${escapeHtml(s.texto)}</div>
+        </div>`).join('');
+    return `
+        <div class="exercise-card" id="card-${teste.id}">
+            <div class="card-meta">
+                <span class="badge-fase" style="background:#0891B218;color:#0891B2;border:1px solid #0891B233;">${ex.nivel} ${ex.faseLbl}</span>
+                <span class="badge-num">Exercício ${idx + 1} de 15</span>
+                <span class="badge-check" id="check-${teste.id}">⬜</span>
+            </div>
+            <div class="card-titulo">${ex.titulo}</div>
+            <div class="cenario-box">${ex.cenario}</div>
+            <div class="pergunta-box">
+                <p class="pergunta-text">${ex.pergunta}</p>
+                <p class="dica-text">💡 ${ex.dica}</p>
+                <div class="stories-list">${storiesHtml}</div>
+                <button class="validar-btn" onclick="validarToggles('${teste.id}')">✅ Validar</button>
+                <p class="feedback-text" id="fb-${teste.id}"></p>
+            </div>
+        </div>`;
+}
+
+function renderHotspotCard(teste, ex, idx) {
+    return `
+        <div class="exercise-card" id="card-${teste.id}">
+            <div class="card-meta">
+                <span class="badge-fase" style="background:#0891B218;color:#0891B2;border:1px solid #0891B233;">${ex.nivel} ${ex.faseLbl}</span>
+                <span class="badge-num">Exercício ${idx + 1} de 15</span>
+                <span class="badge-check" id="check-${teste.id}">⬜</span>
+            </div>
+            <div class="card-titulo">${ex.titulo}</div>
+            <div class="cenario-box">${ex.cenario}</div>
+            <div class="pergunta-box">
+                <p class="pergunta-text">${ex.pergunta}</p>
+                <p class="dica-text">💡 ${ex.dica}</p>
+                <div class="ui-mock">
+                    <nav class="ui-nav">
+                        <div class="ui-hs" id="hs-${teste.id}-logo"    onclick="toggleHs('${teste.id}','logo')">🛒 ShopMed</div>
+                        <div class="ui-hs ui-search" id="hs-${teste.id}-search" onclick="toggleHs('${teste.id}','search')">🔍 Buscar produto...</div>
+                        <div class="ui-hs" id="hs-${teste.id}-login"  onclick="toggleHs('${teste.id}','login')">🔐 Login</div>
+                        <div class="ui-hs" id="hs-${teste.id}-admin"  onclick="toggleHs('${teste.id}','admin')">⚙️ Área do Admin</div>
+                    </nav>
+                    <div class="ui-body">
+                        <div class="ui-left">
+                            <div class="ui-hs ui-filter" id="hs-${teste.id}-filter" onclick="toggleHs('${teste.id}','filter')">
+                                🎚️ Filtrar por preço<br><small style="color:#6B7280;">R$ 0 — R$ 500 (envia parâm. ao servidor)</small>
+                            </div>
+                        </div>
+                        <div class="ui-right">
+                            <div class="ui-hs ui-listing" id="hs-${teste.id}-listing" onclick="toggleHs('${teste.id}','listing')">
+                                📦 Produto A — R$ 49,90<br>
+                                📦 Produto B — R$ 89,90<br>
+                                📦 Produto C — R$ 129,90<br>
+                                <small style="color:#6B7280;">(listagem, somente leitura)</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ui-footer-area">
+                        <div class="ui-hs ui-form" id="hs-${teste.id}-form" onclick="toggleHs('${teste.id}','form')">
+                            📬 Fale Conosco: [ Nome ] [ E-mail ] [ Mensagem ] [ Enviar ]
+                        </div>
+                        <div class="ui-hs ui-copy" id="hs-${teste.id}-copy" onclick="toggleHs('${teste.id}','copy')">
+                            © 2024 ShopMed. Todos os direitos reservados.
+                        </div>
+                    </div>
+                </div>
+                <p style="font-size:11px;color:#6B7280;margin-top:6px;">Clique nos elementos para selecionar/desmarcar</p>
+                <button class="validar-btn" onclick="validarHotspot('${teste.id}')">✅ Validar Seleção</button>
+                <p class="feedback-text" id="fb-${teste.id}"></p>
+            </div>
+        </div>`;
+}
+
+function renderBlanksCard(teste, ex, idx) {
+    const sel = (b) => `<select id="blank-${teste.id}-${b.id}" class="blank-sel">${b.opcoes.map(o => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join('')}</select>`;
+    const [b1, b2, b3, b4] = BLANKS_SUP15;
+    return `
+        <div class="exercise-card" id="card-${teste.id}">
+            <div class="card-meta">
+                <span class="badge-fase" style="background:#0891B218;color:#0891B2;border:1px solid #0891B233;">${ex.nivel} ${ex.faseLbl}</span>
+                <span class="badge-num">Exercício ${idx + 1} de 15</span>
+                <span class="badge-check" id="check-${teste.id}">⬜</span>
+            </div>
+            <div class="card-titulo">${ex.titulo}</div>
+            <div class="cenario-box">${ex.cenario}</div>
+            <div class="pergunta-box">
+                <p class="pergunta-text">${ex.pergunta}</p>
+                <p class="dica-text">💡 ${ex.dica}</p>
+                <div class="report-tpl">
+                    <div class="report-header">📄 Relatório de Superfície de Ataque — BancoPix</div>
+                    <p>Foram identificados <strong>${sel(b1)} pontos de entrada</strong> totais na superfície de ataque.</p>
+                    <p>Destes, <strong>${sel(b2)} estão expostos sem autenticação</strong>, representando risco imediato de acesso não autorizado.</p>
+                    <p>O componente de maior risco é o <strong>${sel(b3)}</strong>, pois está sem autenticação e expõe dados sensíveis de administração.</p>
+                    <p>A ação prioritária de redução de superfície recomendada é <strong>${sel(b4)}</strong>.</p>
+                </div>
+                <button class="validar-btn" onclick="validarBlanks('${teste.id}')">✅ Validar Relatório</button>
+                <p class="feedback-text" id="fb-${teste.id}"></p>
+            </div>
+        </div>`;
+}
+
 function renderCardSuperficie(teste, idx, aluno) {
     const ex = CONTEUDO_SUPERFICIE[teste.id];
-    const faseCorMap = { observacao: '#3B82F6', diferenciacao: '#D97706', classificacao: '#DC2626', sintese: '#7C3AED' };
+    const faseCorMap = { observacao: '#3B82F6', diferenciacao: '#D97706', classificacao: '#DC2626', sintese: '#7C3AED', ambiente: '#0891B2' };
     const faseCor = faseCorMap[ex.fase] || '#374151';
     if (ex.fase === 'classificacao') {
         const base = teste.id === 'sup7' ? ITEMS_DRAG_SUP7 : ITEMS_DRAG_SUP8;
         return renderDragCard(teste, ex, idx, shuffleParaAluno([...base], aluno + teste.id));
     }
+    if (ex.fase === 'ambiente') {
+        if (teste.id === 'sup11') return renderMapCard(teste, ex, idx);
+        if (teste.id === 'sup12') return renderOrdemCard(teste, ex, idx, aluno);
+        if (teste.id === 'sup13') return renderToggleCard(teste, ex, idx);
+        if (teste.id === 'sup14') return renderHotspotCard(teste, ex, idx);
+        if (teste.id === 'sup15') return renderBlanksCard(teste, ex, idx);
+    }
     return `
         <div class="exercise-card" id="card-${teste.id}">
             <div class="card-meta">
                 <span class="badge-fase" style="background:${faseCor}18;color:${faseCor};border:1px solid ${faseCor}33;">${ex.nivel} ${ex.faseLbl}</span>
-                <span class="badge-num">Exercício ${idx + 1} de 10</span>
+                <span class="badge-num">Exercício ${idx + 1} de 15</span>
                 <span class="badge-check" id="check-${teste.id}">⬜</span>
             </div>
             <div class="card-titulo">${ex.titulo}</div>
@@ -3697,6 +3982,65 @@ const estiloSuperficie = `
     .zone-label--sim { color:#15803D; }
     .zone-label--nao { color:#DC2626; }
     @media(max-width:600px){.drag-zones{grid-template-columns:1fr;}}
+
+    /* Map exercise (sup11) */
+    .env-map{display:flex;flex-direction:column;gap:10px;margin-bottom:12px;}
+    .env-zone{border-radius:8px;padding:12px;}
+    .env-zone--ext{background:#FFF7ED;border:2px solid #FED7AA;}
+    .env-zone--int{background:#EFF6FF;border:2px solid #BFDBFE;}
+    .env-zone-lbl{font-size:11px;font-weight:700;color:#374151;margin-bottom:10px;}
+    .env-arrow-sep{text-align:center;font-size:12px;color:#6B7280;font-weight:600;padding:4px 0;}
+    .env-comps{display:flex;flex-wrap:wrap;gap:8px;}
+    .map-comp{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 14px;background:white;border:2px solid #e2e8f0;border-radius:8px;cursor:pointer;user-select:none;transition:all 0.15s;text-align:center;min-width:110px;}
+    .map-comp:hover{border-color:#0891B2;box-shadow:0 2px 8px rgba(8,145,178,0.12);}
+    .map-comp.selected{border-color:#DC2626;background:#fef2f2;}
+    .map-comp.mapa-erro{border-color:#f97316;background:#fff7ed;}
+    .map-emoji{font-size:22px;}
+    .map-nome{font-size:11px;font-weight:600;color:#374151;}
+
+    /* Order exercise (sup12) */
+    .ordem-list{display:flex;flex-direction:column;gap:6px;margin-bottom:12px;}
+    .ordem-item{display:flex;align-items:center;gap:10px;padding:10px 14px;background:white;border:2px solid #e2e8f0;border-radius:6px;cursor:grab;user-select:none;font-size:12px;color:#374151;transition:border-color 0.15s,box-shadow 0.15s;}
+    .ordem-item:active{cursor:grabbing;}
+    .ordem-item.drag-over{border-color:#DC2626;border-style:dashed;background:#fef2f2;}
+    .ordem-handle{font-size:16px;color:#CBD5E1;flex-shrink:0;}
+
+    /* Toggle exercise (sup13) */
+    .stories-list{display:flex;flex-direction:column;gap:8px;margin-bottom:12px;}
+    .story-card{background:white;border:1px solid #e2e8f0;border-radius:8px;padding:12px 14px;}
+    .story-header{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px;}
+    .story-tag{font-size:10px;font-weight:700;color:#0891B2;background:#e0f2fe;padding:2px 7px;border-radius:999px;white-space:nowrap;}
+    .story-text{font-size:12px;color:#374151;line-height:1.5;}
+    .toggle-sw{position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;}
+    .toggle-sw input{opacity:0;width:0;height:0;position:absolute;}
+    .toggle-track{position:absolute;top:0;left:0;right:0;bottom:0;background:#CBD5E1;border-radius:12px;transition:background 0.2s;cursor:pointer;}
+    .toggle-track:after{content:'';position:absolute;height:18px;width:18px;left:3px;bottom:3px;background:white;border-radius:50%;transition:transform 0.2s;}
+    .toggle-sw input:checked + .toggle-track{background:#DC2626;}
+    .toggle-sw input:checked + .toggle-track:after{transform:translateX(20px);}
+
+    /* Hotspot exercise (sup14) */
+    .ui-mock{border:2px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:12px;background:#f8fafc;font-size:12px;}
+    .ui-nav{display:flex;align-items:center;gap:6px;padding:8px 12px;background:white;border-bottom:1px solid #e2e8f0;flex-wrap:wrap;}
+    .ui-search{flex:1;min-width:120px;}
+    .ui-body{display:grid;grid-template-columns:160px 1fr;gap:8px;padding:10px;}
+    .ui-filter{line-height:1.6;}
+    .ui-listing{line-height:1.8;}
+    .ui-footer-area{display:flex;gap:8px;padding:8px 10px;border-top:1px solid #e2e8f0;flex-wrap:wrap;}
+    .ui-form{flex:1;}
+    .ui-hs{padding:8px 10px;border-radius:5px;cursor:pointer;color:#374151;border:2px solid transparent;transition:all 0.15s;user-select:none;}
+    .ui-hs:hover{border-color:#CBD5E1;background:#f1f5f9;}
+    .ui-hs.hs-selected{border-color:#DC2626;background:#fef2f2;color:#7F1D1D;}
+    .ui-hs.hs-erro{border-color:#f97316;background:#fff7ed;}
+    @media(max-width:500px){.ui-body{grid-template-columns:1fr;}}
+
+    /* Blanks exercise (sup15) */
+    .report-tpl{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin-bottom:12px;font-size:12.5px;color:#374151;line-height:2.4;}
+    .report-header{font-size:12px;font-weight:700;color:#DC2626;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #fecaca;}
+    .blank-sel{border:2px solid #CBD5E1;border-radius:4px;padding:2px 6px;font-size:12px;background:white;color:#374151;cursor:pointer;vertical-align:middle;margin:0 3px;}
+    .blank-sel:focus{outline:none;border-color:#DC2626;}
+    .blank-sel.blank-erro{border-color:#f97316;background:#fff7ed;}
+
+    @keyframes shake{0%,100%{transform:translateX(0);}25%{transform:translateX(-4px);}75%{transform:translateX(4px);}}
 `;
 
 const scriptSuperficie = `
@@ -3785,11 +4129,106 @@ const scriptSuperficie = `
         } catch (err) { fb.textContent = '❌ Erro: ' + err.message; fb.style.color = '#dc2626'; }
     }
 
+    // --- exercício 11: mapa clicável ---
+    function toggleMapItem(exId, id) {
+        const el = document.getElementById('mapitem-' + exId + '-' + id);
+        if (el) { el.classList.toggle('selected'); el.classList.remove('mapa-erro'); }
+    }
+    async function validarMapa(exId) {
+        const fb = document.getElementById('fb-' + exId);
+        const selecionados = [];
+        document.querySelectorAll('[id^="mapitem-' + exId + '-"]').forEach(el => {
+            if (el.classList.contains('selected')) selecionados.push(el.id.replace('mapitem-' + exId + '-', ''));
+        });
+        try {
+            const r = await fetch('/superficie/lab/validar', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ exercicioId: exId, selecionados }) });
+            const res = await r.json();
+            if (res.correto) { fb.textContent = '✅ Correto! Superfície mapeada com precisão.'; fb.style.color = '#16a34a'; document.getElementById('card-' + exId).classList.add('concluido'); document.getElementById('check-' + exId).textContent = '✅'; atualizarContadorUI(); }
+            else { fb.textContent = '❌ ' + res.acertos + '/' + res.total + ' componentes corretos. Revise a seleção.'; fb.style.color = '#dc2626'; (res.erros||[]).forEach(id => { const el = document.getElementById('mapitem-' + exId + '-' + id); if (el) el.classList.add('mapa-erro'); }); }
+        } catch(err) { fb.textContent = '❌ Erro: ' + err.message; fb.style.color = '#dc2626'; }
+    }
+
+    // --- exercício 12: ordenar ---
+    let ordemSrcId = null;
+    function ordemDragStart(event, id) { ordemSrcId = id; event.dataTransfer.effectAllowed = 'move'; }
+    function ordemDragOver(event, exId, id) {
+        event.preventDefault();
+        if (!ordemSrcId || ordemSrcId === id) return;
+        document.querySelectorAll('.ordem-item').forEach(el => el.classList.remove('drag-over'));
+        const el = document.getElementById('ordemitem-' + exId + '-' + id);
+        if (el) el.classList.add('drag-over');
+    }
+    function ordemDragLeave(event) { event.currentTarget.classList.remove('drag-over'); }
+    function ordemDrop(event, exId, targetId) {
+        event.preventDefault();
+        if (!ordemSrcId || ordemSrcId === targetId) return;
+        const list = document.getElementById('ordem-list-' + exId);
+        const srcEl = document.getElementById('ordemitem-' + exId + '-' + ordemSrcId);
+        const tgtEl = document.getElementById('ordemitem-' + exId + '-' + targetId);
+        if (srcEl && tgtEl) list.insertBefore(srcEl, tgtEl);
+        document.querySelectorAll('.ordem-item').forEach(el => el.classList.remove('drag-over'));
+        ordemSrcId = null;
+    }
+    async function validarOrdem(exId) {
+        const fb = document.getElementById('fb-' + exId);
+        const list = document.getElementById('ordem-list-' + exId);
+        const ordem = [...list.querySelectorAll('.ordem-item')].map(el => el.dataset.id);
+        try {
+            const r = await fetch('/superficie/lab/validar', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ exercicioId: exId, ordem }) });
+            const res = await r.json();
+            if (res.correto) { fb.textContent = '✅ Sequência correta! Processo mapeado com sucesso.'; fb.style.color = '#16a34a'; document.getElementById('card-' + exId).classList.add('concluido'); document.getElementById('check-' + exId).textContent = '✅'; atualizarContadorUI(); }
+            else { fb.textContent = '❌ Sequência ainda não está correta — ' + res.acertos + '/' + res.total + ' passos na posição certa. Tente reorganizar.'; fb.style.color = '#dc2626'; }
+        } catch(err) { fb.textContent = '❌ Erro: ' + err.message; fb.style.color = '#dc2626'; }
+    }
+
+    // --- exercício 13: toggles ---
+    async function validarToggles(exId) {
+        const fb = document.getElementById('fb-' + exId);
+        const ativados = [];
+        document.querySelectorAll('[id^="toggle-' + exId + '-"]').forEach(el => { if (el.checked) ativados.push(el.id.replace('toggle-' + exId + '-', '')); });
+        try {
+            const r = await fetch('/superficie/lab/validar', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ exercicioId: exId, ativados }) });
+            const res = await r.json();
+            if (res.correto) { fb.textContent = '✅ Correto! Todas as histórias classificadas corretamente.'; fb.style.color = '#16a34a'; document.getElementById('card-' + exId).classList.add('concluido'); document.getElementById('check-' + exId).textContent = '✅'; atualizarContadorUI(); }
+            else { fb.textContent = '❌ ' + res.acertos + '/' + res.total + ' histórias classificadas corretamente. Revise os toggles.'; fb.style.color = '#dc2626'; }
+        } catch(err) { fb.textContent = '❌ Erro: ' + err.message; fb.style.color = '#dc2626'; }
+    }
+
+    // --- exercício 14: hotspot ---
+    function toggleHs(exId, id) {
+        const el = document.getElementById('hs-' + exId + '-' + id);
+        if (el) { el.classList.toggle('hs-selected'); el.classList.remove('hs-erro'); }
+    }
+    async function validarHotspot(exId) {
+        const fb = document.getElementById('fb-' + exId);
+        const clicados = [];
+        document.querySelectorAll('[id^="hs-' + exId + '-"]').forEach(el => { if (el.classList.contains('hs-selected')) clicados.push(el.id.replace('hs-' + exId + '-', '')); });
+        try {
+            const r = await fetch('/superficie/lab/validar', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ exercicioId: exId, clicados }) });
+            const res = await r.json();
+            if (res.correto) { fb.textContent = '✅ Correto! Todos os pontos de entrada identificados.'; fb.style.color = '#16a34a'; document.getElementById('card-' + exId).classList.add('concluido'); document.getElementById('check-' + exId).textContent = '✅'; atualizarContadorUI(); }
+            else { fb.textContent = '❌ ' + res.acertos + '/' + res.total + ' corretos. Alguns elementos estão selecionados incorretamente.'; fb.style.color = '#dc2626'; (res.erros||[]).forEach(id => { const el = document.getElementById('hs-' + exId + '-' + id); if(el) el.classList.add('hs-erro'); }); }
+        } catch(err) { fb.textContent = '❌ Erro: ' + err.message; fb.style.color = '#dc2626'; }
+    }
+
+    // --- exercício 15: blanks ---
+    async function validarBlanks(exId) {
+        const fb = document.getElementById('fb-' + exId);
+        const respostas = {};
+        document.querySelectorAll('[id^="blank-' + exId + '-"]').forEach(el => { respostas[el.id.replace('blank-' + exId + '-', '')] = el.value; });
+        try {
+            const r = await fetch('/superficie/lab/validar', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ exercicioId: exId, respostas }) });
+            const res = await r.json();
+            if (res.correto) { fb.textContent = '✅ Relatório preenchido corretamente!'; fb.style.color = '#16a34a'; document.getElementById('card-' + exId).classList.add('concluido'); document.getElementById('check-' + exId).textContent = '✅'; atualizarContadorUI(); }
+            else { fb.textContent = '❌ ' + res.acertos + '/' + res.total + ' campos corretos.'; fb.style.color = '#dc2626'; (res.erros||[]).forEach(id => { const el = document.getElementById('blank-' + exId + '-' + id); if(el){el.classList.add('blank-erro');} }); }
+        } catch(err) { fb.textContent = '❌ Erro: ' + err.message; fb.style.color = '#dc2626'; }
+    }
+
     async function atualizarContadorUI() {
         try {
             const r = await fetch('/superficie/lab/progresso');
             const res = await r.json();
-            document.getElementById('contador-progresso').textContent = (res.concluidos || []).length + ' / 10 concluídos';
+            document.getElementById('contador-progresso').textContent = (res.concluidos || []).length + ' / 15 concluídos';
         } catch (e) {}
     }
 
@@ -3803,7 +4242,7 @@ const scriptSuperficie = `
                 if (card)  card.classList.add('concluido');
                 if (check) check.textContent = '✅';
             });
-            document.getElementById('contador-progresso').textContent = (res.concluidos || []).length + ' / 10 concluídos';
+            document.getElementById('contador-progresso').textContent = (res.concluidos || []).length + ' / 15 concluídos';
         } catch (err) { console.error('Erro ao carregar progresso:', err); }
     }
 
@@ -3885,7 +4324,7 @@ app.get('/superficie/painel-professor', async (req, res) => {
 
         const totaisColunas = ALUNOS_SUPERFICIE.map(a => {
             const total = testesSuperficie.filter(t => concluidos[a.usuario + ':' + t.id]).length;
-            return `<td id="total-${a.usuario}" style="padding:8px 5px;border:1px solid #DC2626;text-align:center;font-weight:bold;background:#fef2f2;font-size:13px;">${total}/10</td>`;
+            return `<td id="total-${a.usuario}" style="padding:8px 5px;border:1px solid #DC2626;text-align:center;font-weight:bold;background:#fef2f2;font-size:13px;">${total}/15</td>`;
         }).join('');
 
         res.send(`<!DOCTYPE html><html><head>
@@ -3952,7 +4391,7 @@ app.get('/superficie/painel-professor', async (req, res) => {
                                 }
                             });
                             const totEl = document.getElementById('total-' + aluno);
-                            if (totEl) totEl.textContent = total + '/10';
+                            if (totEl) totEl.textContent = total + '/15';
                         });
                         document.getElementById('status-auto').textContent = '🟢 Atualizando automaticamente...';
                     } catch(err) { document.getElementById('status-auto').textContent = '🔴 Falha: ' + err.message; }
@@ -3991,7 +4430,7 @@ app.get('/superficie/lab', exigirLoginSuperficie, (req, res) => {
                 <p>Olá, <strong>${escapeHtml(nome)}</strong></p>
             </div>
             <div class="contador-box">
-                <p id="contador-progresso">0 / 10 concluídos</p>
+                <p id="contador-progresso">0 / 15 concluídos</p>
             </div>
             <div class="surf-section-title">Conceitos</div>
             <p class="surf-hint">Clique em um conceito para ler antes de responder.</p>
@@ -4024,16 +4463,16 @@ app.get('/superficie/lab/progresso', exigirLoginSuperficie, async (req, res) => 
 
 app.post('/superficie/lab/validar', exigirLoginSuperficie, async (req, res) => {
     const aluno = req.session.superficieAluno;
-    const { exercicioId, resposta, classificacao } = req.body;
-    const respostas = RESPOSTAS_SUPERFICIE[exercicioId];
-    if (!respostas) return res.status(400).json({ correto: false, erro: 'Exercício desconhecido' });
+    const { exercicioId, resposta, classificacao, selecionados, ordem, ativados, clicados, respostas: blanksRespostas } = req.body;
+    const tipoResposta = RESPOSTAS_SUPERFICIE[exercicioId];
+    if (!tipoResposta) return res.status(400).json({ correto: false, erro: 'Exercício desconhecido' });
 
     let correto = false;
     let acertos = 0;
     let erros   = [];
     let total   = 0;
 
-    if (respostas === 'drag') {
+    if (tipoResposta === 'drag') {
         const items = exercicioId === 'sup7' ? ITEMS_DRAG_SUP7 : ITEMS_DRAG_SUP8;
         total = items.length;
         items.forEach(item => {
@@ -4041,11 +4480,59 @@ app.post('/superficie/lab/validar', exigirLoginSuperficie, async (req, res) => {
             else { erros.push(item.id); }
         });
         correto = acertos === total;
+
+    } else if (tipoResposta === 'map') {
+        const sel = Array.isArray(selecionados) ? selecionados : [];
+        total = ITEMS_MAP_SUP11.length;
+        ITEMS_MAP_SUP11.forEach(item => {
+            const selecionado = sel.includes(item.id);
+            if (selecionado === item.correto) { acertos++; }
+            else { erros.push(item.id); }
+        });
+        correto = acertos === total;
+
+    } else if (tipoResposta === 'ordem') {
+        const ord = Array.isArray(ordem) ? ordem : [];
+        total = ORDEM_CORRETA_SUP12.length;
+        ORDEM_CORRETA_SUP12.forEach((id, i) => {
+            if (ord[i] === id) { acertos++; }
+        });
+        correto = acertos === total;
+
+    } else if (tipoResposta === 'toggle') {
+        const atv = Array.isArray(ativados) ? ativados : [];
+        total = STORIES_SUP13.length;
+        STORIES_SUP13.forEach(story => {
+            const ativado = atv.includes(story.id);
+            if (ativado === story.correto) { acertos++; }
+            else { erros.push(story.id); }
+        });
+        correto = acertos === total;
+
+    } else if (tipoResposta === 'hotspot') {
+        const cli = Array.isArray(clicados) ? clicados : [];
+        total = HOTSPOTS_SUP14.length;
+        HOTSPOTS_SUP14.forEach(hs => {
+            const clicado = cli.includes(hs.id);
+            if (clicado === hs.correto) { acertos++; }
+            else { erros.push(hs.id); }
+        });
+        correto = acertos === total;
+
+    } else if (tipoResposta === 'blanks') {
+        const rsps = blanksRespostas || {};
+        total = BLANKS_SUP15.length;
+        BLANKS_SUP15.forEach(blank => {
+            if ((rsps[blank.id] || '').trim() === blank.correto) { acertos++; }
+            else { erros.push(blank.id); }
+        });
+        correto = acertos === total;
+
     } else {
         const normalizada = normalizarRespostaSuperficie(resposta);
-        correto = Array.isArray(respostas)
-            ? respostas.some(r => normalizarRespostaSuperficie(r) === normalizada)
-            : normalizarRespostaSuperficie(respostas) === normalizada;
+        correto = Array.isArray(tipoResposta)
+            ? tipoResposta.some(r => normalizarRespostaSuperficie(r) === normalizada)
+            : normalizarRespostaSuperficie(tipoResposta) === normalizada;
     }
 
     if (correto) {
@@ -4057,7 +4544,8 @@ app.post('/superficie/lab/validar', exigirLoginSuperficie, async (req, res) => {
         } catch (err) { console.error('Erro ao registrar progresso Superfície:', err.message); }
     }
 
-    res.json(respostas === 'drag' ? { correto, acertos, total, erros } : { correto });
+    const isSimples = !['drag','map','ordem','toggle','hotspot','blanks'].includes(tipoResposta);
+    res.json(isSimples ? { correto } : { correto, acertos, total, erros });
 });
 
 app.post('/superficie/lab/reset', exigirLoginSuperficie, async (req, res) => {
