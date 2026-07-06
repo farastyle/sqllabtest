@@ -3316,6 +3316,758 @@ app.post('/stride/lab/reset', exigirLoginStride, async (req, res) => {
     } catch (err) { res.status(500).json({ sucesso: false, erro: err.message }); }
 });
 
+// =====================================
+// LAB 6: SUPERFÍCIE DE ATAQUE
+// Aula 17 — Mapear ameaças e riscos em aplicações e APIs
+// Login individual (mesmos 9 alunos do STRIDE, mesmas senhas)
+// =====================================
+
+const SUPERFICIE_CONCEITOS = [
+    { icone: '🎯', nome: 'Superfície de Ataque', cor: '#DC2626',
+      descricao: 'Conjunto de todos os pontos de uma aplicação que podem ser acessados e explorados por um atacante. Cada formulário, API ou endpoint exposto é um ponto na superfície.',
+      exemplo: 'Formulário de login, endpoint POST /api/upload e URL com parâmetros são pontos na superfície de ataque.' },
+    { icone: '🚪', nome: 'Ponto de Entrada', cor: '#EA580C',
+      descricao: 'Qualquer lugar onde dados externos chegam ao sistema: campos de formulário, parâmetros de URL, cabeçalhos HTTP, arquivos enviados, cookies manipuláveis.',
+      exemplo: 'Regra prática: se um usuário (ou atacante) pode enviar algo para ali, é um ponto de entrada.' },
+    { icone: '➡️', nome: 'Vetor de Ataque', cor: '#B45309',
+      descricao: 'O caminho específico que um atacante usa para explorar um ponto de entrada. A superfície é o conjunto de TODOS os pontos; o vetor é a ROTA escolhida pelo atacante.',
+      exemplo: 'Analogia: a superfície é o mapa completo; o vetor é o caminho traçado para chegar ao alvo.' },
+    { icone: '🌐', nome: 'Superfície Interna vs Externa', cor: '#7C3AED',
+      descricao: 'Externa: acessível pela internet (login, APIs públicas). Interna: acessível apenas dentro da rede (banco de dados, backend). Atacantes externos só alcançam a superfície externa.',
+      exemplo: 'Atenção: banco de dados exposto na internet vira superfície EXTERNA — isso é uma vulnerabilidade crítica.' },
+    { icone: '✂️', nome: 'Redução de Superfície', cor: '#059669',
+      descricao: 'Princípio: quanto menor a superfície, menor o risco. Remova endpoints não usados, desative funcionalidades desnecessárias, limite quem pode acessar o quê.',
+      exemplo: 'Remover é mais seguro que mitigar: um endpoint desativado não pode ser explorado, independente do quão vulnerável seria.' }
+];
+
+const ITEMS_DRAG_SUP7 = [
+    { id: 'a', texto: 'Formulário de login da aplicação', correto: 'sim' },
+    { id: 'b', texto: 'Endpoint de API sem autenticação (GET /api/dados)', correto: 'sim' },
+    { id: 'c', texto: 'Campo de busca com parâmetro de URL (?busca=termo)', correto: 'sim' },
+    { id: 'd', texto: 'Código-fonte que valida senhas (roda internamente no servidor)', correto: 'nao' },
+    { id: 'e', texto: 'Arquivo .env com variáveis de ambiente do servidor', correto: 'nao' },
+    { id: 'f', texto: 'Chave privada SSL armazenada internamente no servidor', correto: 'nao' }
+];
+
+const ITEMS_DRAG_SUP8 = [
+    { id: 'a', texto: 'Página de login (/login)', correto: 'sim' },
+    { id: 'b', texto: 'Endpoint de upload de arquivos (POST /upload)', correto: 'sim' },
+    { id: 'c', texto: 'API pública sem token (GET /api/clientes)', correto: 'sim' },
+    { id: 'd', texto: 'Painel administrativo sem autenticação (/admin)', correto: 'sim' },
+    { id: 'e', texto: 'Parâmetro de URL manipulável: /relatorio?id=42', correto: 'sim' },
+    { id: 'f', texto: 'Endpoint de redefinição de senha (/esqueci-senha)', correto: 'sim' },
+    { id: 'g', texto: 'Função interna de cálculo de juros (lógica do servidor)', correto: 'nao' },
+    { id: 'h', texto: 'Banco de dados PostgreSQL na rede interna (porta fechada)', correto: 'nao' },
+    { id: 'i', texto: 'Chave privada RSA armazenada no servidor', correto: 'nao' },
+    { id: 'j', texto: 'Lógica de aprovação de crédito (regra de negócio interna)', correto: 'nao' },
+    { id: 'k', texto: 'Variáveis de ambiente (.env) do servidor', correto: 'nao' },
+    { id: 'l', texto: 'Documentação interna não publicada na internet', correto: 'nao' }
+];
+
+const CONTEUDO_SUPERFICIE = {
+    sup1: {
+        fase: 'observacao', faseLbl: 'Observação', nivel: '🟢',
+        titulo: 'Exercício 1 — Pontos de Entrada em um Formulário',
+        cenario: `<p>Observe o formulário de login abaixo. Em segurança, cada campo que aceita entrada de dados externos é um <strong>ponto de entrada</strong> — e pontos de entrada compõem a superfície de ataque.</p>
+<div style="background:#fff;border:2px solid #e2e8f0;border-radius:8px;padding:16px;margin:12px 0;max-width:300px;">
+    <div style="margin-bottom:10px;"><span style="font-size:12px;font-weight:600;color:#374151;">Usuário:</span><br>
+    <div style="border:1px solid #CBD5E1;border-radius:4px;padding:8px 10px;background:#f8fafc;font-size:12px;color:#94A3B8;margin-top:4px;">Digite seu usuário</div></div>
+    <div style="margin-bottom:12px;"><span style="font-size:12px;font-weight:600;color:#374151;">Senha:</span><br>
+    <div style="border:1px solid #CBD5E1;border-radius:4px;padding:8px 10px;background:#f8fafc;font-size:12px;color:#94A3B8;margin-top:4px;">••••••••</div></div>
+    <div style="background:#DC2626;color:white;text-align:center;padding:8px;border-radius:4px;font-size:12px;font-weight:600;">Entrar</div>
+</div>`,
+        pergunta: 'Quantos <strong>pontos de entrada de dados</strong> um atacante encontra neste formulário?',
+        dica: 'Conte apenas os campos onde o usuário pode DIGITAR algo. O botão "Entrar" executa uma ação mas não aceita dados digitados.'
+    },
+    sup2: {
+        fase: 'observacao', faseLbl: 'Observação', nivel: '🟢',
+        titulo: 'Exercício 2 — Parâmetros de URL',
+        cenario: `<p>O BancoPix gera a URL abaixo quando um cliente acessa seu extrato:</p>
+<div style="background:#1e1b4b;color:#a5b4fc;padding:14px;border-radius:6px;font-family:monospace;font-size:12px;word-break:break-all;margin:12px 0;line-height:1.8;">
+https://app.bancoPix.com/extrato?<span style="color:#fbbf24;">conta</span>=33412&amp;<span style="color:#fbbf24;">formato</span>=pdf&amp;<span style="color:#fbbf24;">periodo</span>=2024-01
+</div>
+<p>Tudo após o <code>?</code> são <strong>parâmetros de URL</strong>. Cada parâmetro que aceita entrada direta é um ponto na superfície de ataque — um atacante poderia modificar <code>conta</code> para ver extratos alheios, alterar <code>formato</code> para tentar exploits, ou manipular <code>periodo</code> para acessar dados além do autorizado.</p>`,
+        pergunta: 'Quantos <strong>parâmetros</strong> desta URL aceitam entrada direta do usuário (e poderiam ser manipulados por um atacante)?',
+        dica: 'Cada par chave=valor separado por "&" é um parâmetro distinto. Conte todos os parâmetros presentes na URL.'
+    },
+    sup3: {
+        fase: 'observacao', faseLbl: 'Observação', nivel: '🟢',
+        titulo: 'Exercício 3 — Nomeando o Conceito',
+        cenario: `<p>O endpoint abaixo foi encontrado durante análise do BancoPix:</p>
+<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:14px;margin:12px 0;">
+    <code style="color:#DC2626;font-size:13px;">GET /api/clientes</code><br><br>
+    <div style="font-size:12px;color:#374151;line-height:1.8;">
+        → Retorna lista completa de clientes com nome, CPF e saldo<br>
+        → <strong>Não exige token de autenticação</strong><br>
+        → Qualquer pessoa com acesso à internet pode chamar este endpoint
+    </div>
+</div>
+<p style="font-size:12px;">Este é apenas <em>um</em> dos muitos pontos expostos na aplicação. O formulário de login, a API de transferências, o endpoint de upload — cada um é mais um ponto exposto. Em segurança, damos um nome específico ao <strong>conjunto de todos</strong> esses pontos.</p>`,
+        pergunta: 'Como chamamos o <strong>conjunto de todos os pontos</strong> expostos de uma aplicação que podem ser explorados por um atacante?',
+        dica: 'É o conceito central desta aula — duas palavras. Consulte a barra lateral.'
+    },
+    sup4: {
+        fase: 'diferenciacao', faseLbl: 'Diferenciação', nivel: '🟡',
+        titulo: 'Exercício 4 — O Que NÃO É Superfície de Ataque',
+        cenario: `<p>O BancoPix tem uma função chamada <code>calcularJuros()</code>:</p>
+<div style="background:#0f172a;color:#94a3b8;padding:14px;border-radius:6px;font-family:monospace;font-size:11.5px;margin:12px 0;line-height:1.8;">
+<span style="color:#64748b;">// Roda EXCLUSIVAMENTE no servidor</span><br>
+<span style="color:#64748b;">// Nunca recebe dados externos diretamente</span><br>
+<span style="color:#64748b;">// Só é acionada internamente após aprovação de crédito</span><br><br>
+<span style="color:#7dd3fc;">function</span> <span style="color:#fbbf24;">calcularJuros</span>(<span style="color:#a5b4fc;">valor, taxa, dias</span>) {<br>
+&nbsp;&nbsp;<span style="color:#7dd3fc;">return</span> valor * Math.pow(<span style="color:#fb923c;">1</span> + taxa, dias / <span style="color:#fb923c;">365</span>);<br>
+}
+</div>
+<p style="font-size:12px;">Esta função não tem rota HTTP, não tem formulário associado, e um atacante externo <strong>não tem como chamá-la diretamente</strong> — ela só executa quando partes internas do sistema a acionam.</p>`,
+        pergunta: 'Esta função interna <code>calcularJuros()</code> faz parte da <strong>superfície de ataque</strong>? Responda <strong>sim</strong> ou <strong>não</strong>.',
+        dica: 'Consulte "Superfície Interna vs Externa" na barra lateral. Um atacante externo consegue enviar dados diretamente para esta função?'
+    },
+    sup5: {
+        fase: 'diferenciacao', faseLbl: 'Diferenciação', nivel: '🟡',
+        titulo: 'Exercício 5 — Ponto de Entrada em Upload',
+        cenario: `<p>O MedConsulta permite upload de laudos médicos:</p>
+<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:14px;margin:12px 0;">
+    <code style="color:#DC2626;font-size:13px;">POST /laudos/upload</code><br><br>
+    <div style="font-size:12px;color:#374151;line-height:1.8;">
+        → Aceita qualquer tipo de arquivo (sem verificar extensão ou conteúdo)<br>
+        → Qualquer usuário autenticado pode enviar<br>
+        → Arquivo salvo diretamente no servidor de produção
+    </div>
+</div>
+<p style="font-size:12px;">Um atacante poderia enviar um arquivo <code>.php</code>, <code>.exe</code> ou um PDF com código malicioso embutido. O endpoint aceita dados externos — um atacante pode explorar a falta de validação do tipo de arquivo.</p>`,
+        pergunta: 'Este endpoint <code>POST /laudos/upload</code> faz parte da <strong>superfície de ataque</strong>? Responda <strong>sim</strong> ou <strong>não</strong>.',
+        dica: 'Este endpoint aceita dados externos? Um atacante poderia enviar algo malicioso para este ponto?'
+    },
+    sup6: {
+        fase: 'diferenciacao', faseLbl: 'Diferenciação', nivel: '🟡',
+        titulo: 'Exercício 6 — Contexto Importa',
+        cenario: `<p>O banco de dados PostgreSQL do BancoPix roda na porta <code>5432</code>. Em uma configuração correta, estaria acessível apenas pela rede interna. Mas o time de infraestrutura cometeu um erro:</p>
+<div style="background:#fef2f2;border:2px solid #fecaca;border-radius:6px;padding:14px;margin:12px 0;font-size:12px;">
+    <strong style="color:#DC2626;">⚠️ Configuração atual (incorreta):</strong><br><br>
+    Porta 5432 do banco → <strong>aberta para a internet</strong><br>
+    Qualquer IP externo consegue tentar conexão direta com o banco<br><br>
+    <span style="color:#6B7280;">Situação correta: porta acessível apenas pela rede interna da empresa</span>
+</div>
+<p style="font-size:12px;">Com essa misconfiguration, um atacante pode tentar se conectar ao banco diretamente — sem precisar passar pela aplicação web.</p>`,
+        pergunta: 'Neste cenário específico, o banco de dados PostgreSQL faz parte da <strong>superfície de ataque</strong>? Responda <strong>sim</strong> ou <strong>não</strong>.',
+        dica: 'A resposta depende do contexto: neste cenário, o banco está na rede interna (fechado) ou exposto para a internet?'
+    },
+    sup7: {
+        fase: 'classificacao', faseLbl: 'Classificação', nivel: '🟡',
+        titulo: 'Exercício 7 — Classificar: É ou Não É? (6 itens)',
+        cenario: '<p>Abaixo estão 6 componentes de um sistema. Arraste cada cartão para a coluna correta.</p>',
+        pergunta: 'Classifique cada componente: <strong>É Superfície de Ataque</strong> ou <strong>Não É Superfície de Ataque</strong>.',
+        dica: 'Pense: um atacante externo consegue interagir diretamente com este componente?'
+    },
+    sup8: {
+        fase: 'classificacao', faseLbl: 'Classificação', nivel: '🔴',
+        titulo: 'Exercício 8 — Classificação Completa (12 itens)',
+        cenario: '<p>Agora com 12 componentes — incluindo casos menos óbvios. Preste atenção nos itens que parecem ambíguos à primeira vista.</p>',
+        pergunta: 'Classifique todos os 12 componentes entre <strong>É Superfície de Ataque</strong> e <strong>Não É Superfície de Ataque</strong>.',
+        dica: 'Para casos limítrofes: o que importa é se o atacante tem acesso DIRETO ao componente, não se pode ser afetado indiretamente.'
+    },
+    sup9: {
+        fase: 'sintese', faseLbl: 'Síntese', nivel: '🔴',
+        titulo: 'Exercício 9 — Contando a Superfície',
+        cenario: `<p>O MedConsulta tem os seguintes 8 componentes:</p>
+<ol style="font-size:12px;line-height:2.2;padding-left:18px;margin:10px 0;">
+    <li>Página de login para médicos e pacientes</li>
+    <li>Formulário de agendamento de consultas</li>
+    <li>API de disponibilidade sem autenticação (<code>GET /api/agenda</code>)</li>
+    <li>Endpoint de upload de laudos PDF (<code>POST /laudos/upload</code>)</li>
+    <li>Painel administrativo acessível sem autenticação (<code>/admin</code>)</li>
+    <li>Banco de dados interno com prontuários (rede interna fechada, porta não exposta)</li>
+    <li>Função de cálculo de honorários médicos (lógica interna do servidor)</li>
+    <li>Chave de criptografia dos prontuários (armazenada internamente no servidor)</li>
+</ol>`,
+        pergunta: 'Quantos destes <strong>8 componentes</strong> fazem parte da superfície de ataque do MedConsulta?',
+        dica: 'Identifique quais podem ser acessados ou manipulados diretamente por um usuário externo. Os componentes 6, 7 e 8 ficam na rede interna sem interface externa.'
+    },
+    sup10: {
+        fase: 'sintese', faseLbl: 'Síntese', nivel: '🔴',
+        titulo: 'Exercício 10 — Princípio de Redução de Superfície',
+        cenario: `<p>O BancoPix ainda mantém ativo um endpoint legado:</p>
+<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:14px;margin:12px 0;">
+    <code style="color:#DC2626;font-size:13px;">GET /api/v1/transferencia</code><br><br>
+    <div style="font-size:12px;color:#374151;line-height:1.8;">
+        → Versão antiga da API de transferências<br>
+        → Não é mais chamado pelo app atual<br>
+        → Ainda está ativo e acessível no servidor
+    </div>
+</div>
+<p style="font-size:12px;">O time quer <strong>reduzir a superfície de ataque</strong> relacionada a este endpoint. Duas opções foram propostas:</p>
+<ul style="font-size:12px;line-height:2;padding-left:18px;margin:8px 0;">
+    <li><strong>A)</strong> Adicionar autenticação e validação mais rigorosa neste endpoint</li>
+    <li><strong>B)</strong> Desativar e remover completamente este endpoint do servidor</li>
+</ul>`,
+        pergunta: 'Qual opção <strong>reduz mais efetivamente</strong> a superfície de ataque? Responda <strong>A</strong> ou <strong>B</strong>.',
+        dica: 'Consulte "Redução de Superfície" na barra lateral. Lembre: um endpoint que não existe não pode ser explorado.'
+    }
+};
+
+const RESPOSTAS_SUPERFICIE = {
+    sup1:  ['2'],
+    sup2:  ['3'],
+    sup3:  ['superficie de ataque', 'superficie', 'attack surface', 'superficie de ataques'],
+    sup4:  ['nao', 'não', 'n'],
+    sup5:  ['sim', 's'],
+    sup6:  ['sim', 's'],
+    sup7:  'drag',
+    sup8:  'drag',
+    sup9:  ['5'],
+    sup10: ['b', 'b desativar', 'b remover', 'desativar', 'remover', 'opcao b', 'opção b']
+};
+
+function normalizarRespostaSuperficie(s) {
+    return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+const testesSuperficie = [
+    { id: 'sup1',  nome: '1️⃣ Pontos de Entrada no Formulário' },
+    { id: 'sup2',  nome: '2️⃣ Parâmetros de URL' },
+    { id: 'sup3',  nome: '3️⃣ Nomeando o Conceito' },
+    { id: 'sup4',  nome: '4️⃣ O Que Não É Superfície' },
+    { id: 'sup5',  nome: '5️⃣ Upload como Ponto de Entrada' },
+    { id: 'sup6',  nome: '6️⃣ Contexto Importa' },
+    { id: 'sup7',  nome: '7️⃣ Classificação — 6 Itens' },
+    { id: 'sup8',  nome: '8️⃣ Classificação — 12 Itens' },
+    { id: 'sup9',  nome: '9️⃣ Contando a Superfície' },
+    { id: 'sup10', nome: '🔟 Princípio de Redução' }
+];
+
+const ALUNOS_SUPERFICIE = [
+    { usuario: 'antonio',  senha: 'M', nomeExibicao: 'Antonio M' },
+    { usuario: 'laura',    senha: 'M', nomeExibicao: 'Laura M' },
+    { usuario: 'max',      senha: 'C', nomeExibicao: 'Max C' },
+    { usuario: 'sergio',   senha: 'B', nomeExibicao: 'Sérgio B' },
+    { usuario: 'aline',    senha: 'B', nomeExibicao: 'Aline B' },
+    { usuario: 'enzo',     senha: 'V', nomeExibicao: 'Enzo V' },
+    { usuario: 'fernanda', senha: 'A', nomeExibicao: 'Fernanda A' },
+    { usuario: 'maiara',   senha: 'M', nomeExibicao: 'Maiara M' },
+    { usuario: 'paulo',    senha: 'B', nomeExibicao: 'Paulo B' }
+];
+const CREDENCIAIS_SUPERFICIE = {};
+ALUNOS_SUPERFICIE.forEach(a => { CREDENCIAIS_SUPERFICIE[a.usuario] = a; });
+
+function renderSidebarSuperficie() {
+    return SUPERFICIE_CONCEITOS.map((c, i) => `
+        <div class="surf-category">
+            <div class="surf-cat-header" onclick="toggleConceito(${i})">
+                <span class="surf-icon">${c.icone}</span>
+                <span class="surf-cat-name">${c.nome}</span>
+                <span class="surf-cat-arrow" id="sarrow-${i}">▶</span>
+            </div>
+            <div class="surf-cat-body" id="sconceito-${i}">
+                <p>${c.descricao}</p>
+                <p style="margin-top:7px;color:#92400e;font-style:italic;"><strong>Exemplo:</strong> ${c.exemplo}</p>
+            </div>
+        </div>
+    `).join('');
+}
+
+function renderDragCard(teste, ex, idx, items) {
+    const faseCor = '#DC2626';
+    const itemsHtml = items.map(item => `
+        <div class="drag-item" id="drag-${teste.id}-${item.id}" draggable="true"
+             ondragstart="onDragStart(event,'${teste.id}','${item.id}')">
+            ${escapeHtml(item.texto)}
+        </div>
+    `).join('');
+    return `
+        <div class="exercise-card" id="card-${teste.id}">
+            <div class="card-meta">
+                <span class="badge-fase" style="background:#DC262618;color:#DC2626;border:1px solid #DC262633;">${ex.nivel} ${ex.faseLbl}</span>
+                <span class="badge-num">Exercício ${idx + 1} de 10</span>
+                <span class="badge-check" id="check-${teste.id}">⬜</span>
+            </div>
+            <div class="card-titulo">${ex.titulo}</div>
+            <div class="cenario-box">${ex.cenario}</div>
+            <div class="pergunta-box">
+                <p class="pergunta-text">${ex.pergunta}</p>
+                <p class="dica-text">💡 ${ex.dica}</p>
+                <div class="drag-pool" id="pool-${teste.id}"
+                     ondragover="event.preventDefault()"
+                     ondrop="onDrop(event,'${teste.id}','pool')">${itemsHtml}</div>
+                <div class="drag-zones">
+                    <div class="drag-zone drag-zone--sim" id="zone-sim-${teste.id}"
+                         ondragover="event.preventDefault()"
+                         ondrop="onDrop(event,'${teste.id}','sim')">
+                        <div class="zone-label zone-label--sim">✅ É Superfície de Ataque</div>
+                    </div>
+                    <div class="drag-zone drag-zone--nao" id="zone-nao-${teste.id}"
+                         ondragover="event.preventDefault()"
+                         ondrop="onDrop(event,'${teste.id}','nao')">
+                        <div class="zone-label zone-label--nao">❌ Não É Superfície de Ataque</div>
+                    </div>
+                </div>
+                <button class="validar-btn" onclick="validarDrag('${teste.id}')">✅ Validar Classificação</button>
+                <p class="feedback-text" id="fb-${teste.id}"></p>
+            </div>
+        </div>`;
+}
+
+function renderCardSuperficie(teste, idx, aluno) {
+    const ex = CONTEUDO_SUPERFICIE[teste.id];
+    const faseCorMap = { observacao: '#3B82F6', diferenciacao: '#D97706', classificacao: '#DC2626', sintese: '#7C3AED' };
+    const faseCor = faseCorMap[ex.fase] || '#374151';
+    if (ex.fase === 'classificacao') {
+        const base = teste.id === 'sup7' ? ITEMS_DRAG_SUP7 : ITEMS_DRAG_SUP8;
+        return renderDragCard(teste, ex, idx, shuffleParaAluno([...base], aluno + teste.id));
+    }
+    return `
+        <div class="exercise-card" id="card-${teste.id}">
+            <div class="card-meta">
+                <span class="badge-fase" style="background:${faseCor}18;color:${faseCor};border:1px solid ${faseCor}33;">${ex.nivel} ${ex.faseLbl}</span>
+                <span class="badge-num">Exercício ${idx + 1} de 10</span>
+                <span class="badge-check" id="check-${teste.id}">⬜</span>
+            </div>
+            <div class="card-titulo">${ex.titulo}</div>
+            <div class="cenario-box">${ex.cenario}</div>
+            <div class="pergunta-box">
+                <p class="pergunta-text">${ex.pergunta}</p>
+                <p class="dica-text">💡 ${ex.dica}</p>
+                <input type="text" id="resp-${teste.id}" class="resp-input" placeholder="Digite sua resposta...">
+                <button class="validar-btn" onclick="validarSuperficie('${teste.id}')">✅ Validar</button>
+                <p class="feedback-text" id="fb-${teste.id}"></p>
+            </div>
+        </div>`;
+}
+
+function renderExerciciosSuperficie(aluno) {
+    return shuffleParaAluno([...testesSuperficie], aluno)
+        .map((t, i) => renderCardSuperficie(t, i, aluno)).join('');
+}
+
+const estiloSuperficie = `
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family: sans-serif; background: #FFF5F5; }
+    .container { display:flex; min-height:100vh; }
+    .sidebar { width:270px; background:#fff; padding:18px 14px; border-right:2px solid #FECACA; position:sticky; top:0; height:100vh; overflow-y:auto; display:flex; flex-direction:column; }
+    .sidebar-brand { margin-bottom:14px; }
+    .sidebar-brand h2 { font-size:15px; color:#7F1D1D; margin-bottom:3px; }
+    .sidebar-brand p { font-size:12px; color:#64748B; }
+    .contador-box { background:#fef2f2; border-radius:8px; padding:10px 12px; margin-bottom:14px; border:1px solid #fecaca; }
+    .contador-box p { font-size:13px; font-weight:700; color:#DC2626; }
+    .surf-section-title { font-size:10px; font-weight:700; color:#94A3B8; text-transform:uppercase; letter-spacing:0.07em; margin-bottom:6px; }
+    .surf-hint { font-size:11px; color:#6B7280; margin-bottom:10px; line-height:1.5; }
+    .surf-category { margin-bottom:5px; }
+    .surf-cat-header { display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:6px; cursor:pointer; border:1px solid #e2e8f0; background:#f8fafc; user-select:none; transition:background 0.15s; }
+    .surf-cat-header:hover { background:#fef2f2; border-color:#fecaca; }
+    .surf-cat-header.open { background:#fef2f2; border-color:#fca5a5; border-radius:6px 6px 0 0; }
+    .surf-icon { font-size:16px; flex-shrink:0; }
+    .surf-cat-name { font-size:12px; font-weight:600; color:#374151; flex:1; }
+    .surf-cat-arrow { font-size:10px; color:#94A3B8; }
+    .surf-cat-body { display:none; padding:10px; background:#fff5f5; border:1px solid #fca5a5; border-top:none; border-radius:0 0 6px 6px; font-size:11px; color:#374151; line-height:1.65; }
+    .surf-cat-body.open { display:block; }
+    .sidebar-actions { margin-top:auto; padding-top:14px; border-top:1px solid #E2E8F0; }
+    .btn-reset { display:block; width:100%; text-align:center; padding:9px; background:#6c757d; color:white; border:none; border-radius:5px; cursor:pointer; font-size:12px; font-weight:600; margin-bottom:6px; }
+    .btn-logout { display:block; text-align:center; padding:9px; background:#374151; color:white; text-decoration:none; border-radius:5px; font-size:12px; margin-bottom:6px; }
+    .btn-hub { display:block; text-align:center; padding:8px; color:#6B7280; text-decoration:none; font-size:12px; }
+    .main { flex:1; padding:22px 28px; max-width:780px; }
+    .main-header { background:linear-gradient(135deg,#DC2626,#B91C1C); color:white; padding:16px 20px; border-radius:10px; margin-bottom:20px; }
+    .main-header h2 { font-size:17px; margin-bottom:4px; }
+    .main-header p { font-size:12px; opacity:0.85; }
+    .exercise-card { background:white; border-radius:10px; padding:18px 20px; margin-bottom:16px; border:2px solid #E2E8F0; transition:border-color 0.2s,box-shadow 0.2s; }
+    .exercise-card.concluido { border-color:#22C55E; box-shadow:0 0 0 3px rgba(34,197,94,0.08); }
+    .card-meta { display:flex; gap:8px; align-items:center; margin-bottom:10px; flex-wrap:wrap; }
+    .badge-fase { font-size:11px; font-weight:600; padding:3px 9px; border-radius:999px; }
+    .badge-num { font-size:11px; color:#94A3B8; margin-left:auto; }
+    .badge-check { font-size:16px; }
+    .card-titulo { font-size:14px; font-weight:700; color:#111827; margin-bottom:12px; }
+    .cenario-box { font-size:12.5px; color:#374151; line-height:1.75; margin-bottom:14px; background:#F8FAFC; border-radius:6px; padding:12px 14px; border-left:3px solid #FCA5A5; }
+    .pergunta-box { border:1px solid #FECACA; border-radius:7px; padding:14px; }
+    .pergunta-text { font-size:13px; font-weight:600; color:#7F1D1D; margin-bottom:6px; }
+    .dica-text { font-size:11px; color:#6B7280; margin-bottom:10px; font-style:italic; line-height:1.5; }
+    .resp-input { width:100%; padding:9px; border:1px solid #CBD5E1; border-radius:5px; font-size:13px; margin-bottom:8px; }
+    .resp-input:focus { outline:none; border-color:#FCA5A5; box-shadow:0 0 0 2px rgba(220,38,38,0.15); }
+    .validar-btn { padding:9px 20px; background:#DC2626; color:white; border:none; border-radius:5px; font-weight:700; cursor:pointer; font-size:13px; transition:background 0.15s; }
+    .validar-btn:hover { background:#B91C1C; }
+    .feedback-text { margin-top:8px; font-size:12px; min-height:18px; }
+    pre { white-space:pre-wrap; word-break:break-word; }
+    code { background:#F1F5F9; padding:1px 5px; border-radius:3px; font-size:11.5px; }
+    .drag-pool { display:flex; flex-wrap:wrap; gap:8px; min-height:52px; padding:10px; margin-bottom:12px; background:#f8fafc; border:2px dashed #CBD5E1; border-radius:8px; }
+    .drag-item { background:white; border:2px solid #e2e8f0; border-radius:6px; padding:8px 12px; font-size:12px; color:#374151; cursor:grab; user-select:none; line-height:1.4; transition:border-color 0.15s,box-shadow 0.15s; }
+    .drag-item:hover { border-color:#DC2626; box-shadow:0 2px 8px rgba(220,38,38,0.12); }
+    .drag-item:active { cursor:grabbing; }
+    .drag-zones { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px; }
+    .drag-zone { min-height:100px; padding:10px; border-radius:8px; border:2px dashed; display:flex; flex-direction:column; gap:6px; }
+    .drag-zone--sim { background:#f0fdf4; border-color:#86efac; }
+    .drag-zone--nao { background:#fef2f2; border-color:#fca5a5; }
+    .zone-label { font-size:11px; font-weight:700; padding-bottom:6px; border-bottom:1px solid currentColor; margin-bottom:4px; opacity:0.8; }
+    .zone-label--sim { color:#15803D; }
+    .zone-label--nao { color:#DC2626; }
+    @media(max-width:600px){.drag-zones{grid-template-columns:1fr;}}
+`;
+
+const scriptSuperficie = `
+    function toggleConceito(idx) {
+        const body   = document.getElementById('sconceito-' + idx);
+        const arrow  = document.getElementById('sarrow-'   + idx);
+        const header = body.previousElementSibling;
+        const isOpen = body.classList.contains('open');
+        document.querySelectorAll('.surf-cat-body').forEach(b => b.classList.remove('open'));
+        document.querySelectorAll('.surf-cat-header').forEach(h => h.classList.remove('open'));
+        document.querySelectorAll('.surf-cat-arrow').forEach(a => a.textContent = '▶');
+        if (!isOpen) { body.classList.add('open'); header.classList.add('open'); arrow.textContent = '▼'; }
+    }
+
+    async function validarSuperficie(id) {
+        const input = document.getElementById('resp-' + id);
+        const fb    = document.getElementById('fb-'   + id);
+        try {
+            const r   = await fetch('/superficie/lab/validar', {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({ exercicioId: id, resposta: input.value })
+            });
+            const res = await r.json();
+            if (res.correto) {
+                fb.textContent = '✅ Correto! Exercício concluído.';
+                fb.style.color = '#16a34a';
+                document.getElementById('card-'  + id).classList.add('concluido');
+                document.getElementById('check-' + id).textContent = '✅';
+                atualizarContadorUI();
+            } else {
+                fb.textContent = '❌ Ainda não. Consulte a barra lateral e tente novamente.';
+                fb.style.color = '#dc2626';
+            }
+        } catch (err) { fb.textContent = '❌ Erro: ' + err.message; fb.style.color = '#dc2626'; }
+    }
+
+    let dragSrc = null;
+    function onDragStart(event, exId, itemId) {
+        dragSrc = { exId, itemId };
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', exId + ':' + itemId);
+    }
+    function onDrop(event, exId, zone) {
+        event.preventDefault();
+        if (!dragSrc || dragSrc.exId !== exId) return;
+        const itemEl = document.getElementById('drag-' + exId + '-' + dragSrc.itemId);
+        if (!itemEl) return;
+        const targets = { sim: 'zone-sim-', nao: 'zone-nao-', pool: 'pool-' };
+        const target  = document.getElementById((targets[zone] || 'pool-') + exId);
+        if (target) { target.appendChild(itemEl); itemEl.style.borderColor = ''; itemEl.style.background = ''; }
+        dragSrc = null;
+    }
+
+    async function validarDrag(exId) {
+        const fb       = document.getElementById('fb-' + exId);
+        const simEl    = document.getElementById('zone-sim-' + exId);
+        const naoEl    = document.getElementById('zone-nao-' + exId);
+        const poolEl   = document.getElementById('pool-'     + exId);
+        if (poolEl && poolEl.querySelectorAll('.drag-item').length > 0) {
+            fb.textContent = '⚠️ Classifique todos os itens antes de validar.';
+            fb.style.color = '#D97706'; return;
+        }
+        const classificacao = {};
+        simEl.querySelectorAll('.drag-item').forEach(el => { classificacao[el.id.replace('drag-' + exId + '-', '')] = 'sim'; });
+        naoEl.querySelectorAll('.drag-item').forEach(el => { classificacao[el.id.replace('drag-' + exId + '-', '')] = 'nao'; });
+        try {
+            const r   = await fetch('/superficie/lab/validar', {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({ exercicioId: exId, classificacao })
+            });
+            const res = await r.json();
+            if (res.correto) {
+                fb.textContent = '✅ Perfeito! Todos os ' + res.total + ' itens classificados corretamente.';
+                fb.style.color = '#16a34a';
+                document.getElementById('card-'  + exId).classList.add('concluido');
+                document.getElementById('check-' + exId).textContent = '✅';
+                atualizarContadorUI();
+            } else {
+                fb.textContent = '❌ ' + res.acertos + '/' + res.total + ' corretos. Alguns itens estão na coluna errada — corrija e tente novamente.';
+                fb.style.color = '#dc2626';
+                (res.erros || []).forEach(id => {
+                    const el = document.getElementById('drag-' + exId + '-' + id);
+                    if (el) { el.style.borderColor = '#DC2626'; el.style.background = '#fef2f2'; }
+                });
+            }
+        } catch (err) { fb.textContent = '❌ Erro: ' + err.message; fb.style.color = '#dc2626'; }
+    }
+
+    async function atualizarContadorUI() {
+        try {
+            const r = await fetch('/superficie/lab/progresso');
+            const res = await r.json();
+            document.getElementById('contador-progresso').textContent = (res.concluidos || []).length + ' / 10 concluídos';
+        } catch (e) {}
+    }
+
+    async function carregarProgressoSuperficie() {
+        try {
+            const r   = await fetch('/superficie/lab/progresso');
+            const res = await r.json();
+            (res.concluidos || []).forEach(id => {
+                const card  = document.getElementById('card-'  + id);
+                const check = document.getElementById('check-' + id);
+                if (card)  card.classList.add('concluido');
+                if (check) check.textContent = '✅';
+            });
+            document.getElementById('contador-progresso').textContent = (res.concluidos || []).length + ' / 10 concluídos';
+        } catch (err) { console.error('Erro ao carregar progresso:', err); }
+    }
+
+    async function resetarSuperficie() {
+        if (!confirm('⚠️ Isso vai zerar todo o seu progresso. Continuar?')) return;
+        try {
+            const r   = await fetch('/superficie/lab/reset', { method: 'POST' });
+            const res = await r.json();
+            alert(res.mensagem || res.erro);
+            window.location.reload();
+        } catch (err) { alert('❌ Erro: ' + err.message); }
+    }
+
+    carregarProgressoSuperficie();
+`;
+
+app.get('/superficie', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'superficie-login.html'));
+});
+
+app.post('/superficie/login', (req, res) => {
+    const usuario = String(req.body.usuario || '').trim().toLowerCase();
+    const senha   = String(req.body.senha   || '').trim();
+    const conta   = CREDENCIAIS_SUPERFICIE[usuario];
+    if (!conta || conta.senha !== senha) return res.redirect('/superficie?erro=1');
+    req.session.superficieAluno = usuario;
+    req.session.superficieNome  = conta.nomeExibicao;
+    res.redirect('/superficie/lab');
+});
+
+app.get('/superficie/logout', (req, res) => {
+    req.session.superficieAluno = null;
+    req.session.superficieNome  = null;
+    res.redirect('/superficie');
+});
+
+function exigirLoginSuperficie(req, res, next) {
+    if (req.session.superficieAluno) return next();
+    res.redirect('/superficie');
+}
+
+app.get('/superficie/painel-professor/dados', async (req, res) => {
+    try {
+        const r = await pool.query('SELECT aluno, exercicio_id, concluido_em FROM superficie_progresso');
+        const concluidos = {};
+        r.rows.forEach(row => { concluidos[row.aluno + ':' + row.exercicio_id] = row.concluido_em; });
+        res.json({ concluidos });
+    } catch (err) { res.status(500).json({ erro: err.message }); }
+});
+
+app.get('/superficie/painel-professor', async (req, res) => {
+    try {
+        const r = await pool.query('SELECT aluno, exercicio_id, concluido_em FROM superficie_progresso');
+        const concluidos = {};
+        r.rows.forEach(row => { concluidos[row.aluno + ':' + row.exercicio_id] = row.concluido_em; });
+
+        const headerCols = ALUNOS_SUPERFICIE.map(a =>
+            `<th style="padding:8px 6px;border:1px solid #B91C1C;font-size:11px;min-width:70px;">${a.nomeExibicao}</th>`
+        ).join('');
+
+        const linhas = testesSuperficie.map(t => {
+            const colunas = ALUNOS_SUPERFICIE.map(a => {
+                const key = a.usuario + ':' + t.id;
+                const ts  = concluidos[key];
+                const id  = 'cel-' + a.usuario + '-' + t.id;
+                if (ts) {
+                    const dt = new Date(ts).toLocaleString('pt-BR');
+                    return `<td id="${id}" style="padding:7px 5px;border:1px solid #ddd;text-align:center;background:#d4edda;font-size:11px;">✅<br><small style="color:#555;">${dt}</small></td>`;
+                }
+                return `<td id="${id}" style="padding:7px 5px;border:1px solid #ddd;text-align:center;background:#f8d7da;color:#721c24;font-size:13px;">❌</td>`;
+            }).join('');
+            const totalEx = ALUNOS_SUPERFICIE.filter(a => concluidos[a.usuario + ':' + t.id]).length;
+            return `<tr>
+                <td style="padding:8px 10px;border:1px solid #ddd;font-size:12px;white-space:nowrap;">${t.nome}</td>
+                ${colunas}
+                <td style="padding:7px 8px;border:1px solid #ddd;text-align:center;font-size:12px;font-weight:bold;background:#fff5f5;">${totalEx}/${ALUNOS_SUPERFICIE.length}</td>
+            </tr>`;
+        }).join('');
+
+        const totaisColunas = ALUNOS_SUPERFICIE.map(a => {
+            const total = testesSuperficie.filter(t => concluidos[a.usuario + ':' + t.id]).length;
+            return `<td id="total-${a.usuario}" style="padding:8px 5px;border:1px solid #DC2626;text-align:center;font-weight:bold;background:#fef2f2;font-size:13px;">${total}/10</td>`;
+        }).join('');
+
+        res.send(`<!DOCTYPE html><html><head>
+            <meta charset="UTF-8">
+            <title>Painel do Professor — Superfície de Ataque</title>
+            <style>body{font-family:sans-serif;max-width:1100px;margin:40px auto;padding:20px;}table{border-collapse:collapse;}.table-wrap{overflow-x:auto;}</style>
+        </head><body>
+            <h2>🧑‍🏫 Painel do Professor — Superfície de Ataque (Aula 17)</h2>
+            <p style="color:#666;margin-bottom:20px;">Esta página não tem link nos menus.
+                <span id="status-auto" style="color:#DC2626;">🟢 Atualizando automaticamente...</span></p>
+            <div class="table-wrap">
+            <table style="width:100%;min-width:900px;">
+                <thead>
+                    <tr>
+                        <th style="padding:10px;border:1px solid #B91C1C;text-align:left;min-width:200px;background:#DC2626;color:white;">Exercício</th>
+                        ${headerCols}
+                        <th style="padding:8px;border:1px solid #B91C1C;font-size:11px;background:#DC2626;color:white;">Total</th>
+                    </tr>
+                </thead>
+                <tbody>${linhas}</tbody>
+                <tfoot>
+                    <tr>
+                        <td style="padding:8px 10px;border:1px solid #DC2626;font-weight:bold;background:#fef2f2;">Total por aluno</td>
+                        ${totaisColunas}
+                        <td style="border:1px solid #DC2626;background:#fef2f2;"></td>
+                    </tr>
+                </tfoot>
+            </table>
+            </div>
+            <div style="margin-top:20px;display:flex;flex-wrap:wrap;gap:10px;">
+                ${ALUNOS_SUPERFICIE.map(a => `
+                    <form action="/superficie/painel-professor/limpar/${a.usuario}" method="POST"
+                          onsubmit="return confirm('Limpar progresso de ${a.nomeExibicao}?');">
+                        <button type="submit" style="padding:8px 14px;background:#6c757d;color:white;border:none;border-radius:4px;cursor:pointer;font-size:12px;">
+                            🧹 ${a.nomeExibicao}
+                        </button>
+                    </form>
+                `).join('')}
+            </div>
+            <script>
+                const SUP_ALUNOS = ${JSON.stringify(ALUNOS_SUPERFICIE.map(a => a.usuario))};
+                const SUP_TESTES = ${JSON.stringify(testesSuperficie.map(t => t.id))};
+                async function atualizarPainelSup() {
+                    try {
+                        const res = await fetch('/superficie/painel-professor/dados');
+                        const dados = await res.json();
+                        const concluidos = dados.concluidos || {};
+                        SUP_ALUNOS.forEach(aluno => {
+                            let total = 0;
+                            SUP_TESTES.forEach(tid => {
+                                const cel = document.getElementById('cel-' + aluno + '-' + tid);
+                                if (!cel) return;
+                                const ts = concluidos[aluno + ':' + tid];
+                                if (ts) {
+                                    total++;
+                                    if (cel.dataset.ts !== ts) {
+                                        cel.style.background = '#d4edda'; cel.style.color = '';
+                                        cel.innerHTML = '✅<br><small style="color:#555;">' + new Date(ts).toLocaleString('pt-BR') + '</small>';
+                                        cel.dataset.ts = ts;
+                                    }
+                                } else if (cel.dataset.ts) {
+                                    cel.style.background = '#f8d7da'; cel.style.color = '#721c24';
+                                    cel.innerHTML = '❌'; delete cel.dataset.ts;
+                                }
+                            });
+                            const totEl = document.getElementById('total-' + aluno);
+                            if (totEl) totEl.textContent = total + '/10';
+                        });
+                        document.getElementById('status-auto').textContent = '🟢 Atualizando automaticamente...';
+                    } catch(err) { document.getElementById('status-auto').textContent = '🔴 Falha: ' + err.message; }
+                }
+                setInterval(atualizarPainelSup, 5000);
+            </script>
+        </body></html>`);
+    } catch (err) {
+        res.status(500).send(`<p style="color:red;font-family:sans-serif;">❌ Erro: ${escapeHtml(err.message)}</p>`);
+    }
+});
+
+app.post('/superficie/painel-professor/limpar/:aluno', async (req, res) => {
+    const aluno = req.params.aluno;
+    if (!CREDENCIAIS_SUPERFICIE[aluno]) return res.status(400).send('Aluno desconhecido');
+    try {
+        await pool.query('DELETE FROM superficie_progresso WHERE aluno=$1', [aluno]);
+        res.redirect('/superficie/painel-professor');
+    } catch (err) {
+        res.status(500).send(`<p style="color:red;font-family:sans-serif;">❌ Erro: ${escapeHtml(err.message)}</p>`);
+    }
+});
+
+app.get('/superficie/lab', exigirLoginSuperficie, (req, res) => {
+    const aluno = req.session.superficieAluno;
+    const nome  = req.session.superficieNome;
+    res.send(`<!DOCTYPE html><html><head>
+        <meta charset="UTF-8">
+        <title>Superfície de Ataque — ${escapeHtml(nome)}</title>
+        <style>${estiloSuperficie}</style>
+    </head><body>
+    <div class="container">
+        <div class="sidebar">
+            <div class="sidebar-brand">
+                <h2>🎯 Superfície de Ataque</h2>
+                <p>Olá, <strong>${escapeHtml(nome)}</strong></p>
+            </div>
+            <div class="contador-box">
+                <p id="contador-progresso">0 / 10 concluídos</p>
+            </div>
+            <div class="surf-section-title">Conceitos</div>
+            <p class="surf-hint">Clique em um conceito para ler antes de responder.</p>
+            ${renderSidebarSuperficie()}
+            <div class="sidebar-actions">
+                <button class="btn-reset" onclick="resetarSuperficie()">🔄 Resetar Progresso</button>
+                <a href="/superficie/logout" class="btn-logout">🚪 Sair</a>
+                <a href="/" class="btn-hub">← Voltar ao Hub</a>
+            </div>
+        </div>
+        <div class="main">
+            <div class="main-header">
+                <h2>🎯 Superfície de Ataque</h2>
+                <p>Identifique os pontos expostos de uma aplicação — onde começa qualquer análise de segurança.</p>
+            </div>
+            ${renderExerciciosSuperficie(aluno)}
+        </div>
+    </div>
+    <script>${scriptSuperficie}</script>
+    </body></html>`);
+});
+
+app.get('/superficie/lab/progresso', exigirLoginSuperficie, async (req, res) => {
+    const aluno = req.session.superficieAluno;
+    try {
+        const r = await pool.query('SELECT exercicio_id FROM superficie_progresso WHERE aluno=$1', [aluno]);
+        res.json({ concluidos: r.rows.map(row => row.exercicio_id) });
+    } catch (err) { res.status(500).json({ erro: err.message }); }
+});
+
+app.post('/superficie/lab/validar', exigirLoginSuperficie, async (req, res) => {
+    const aluno = req.session.superficieAluno;
+    const { exercicioId, resposta, classificacao } = req.body;
+    const respostas = RESPOSTAS_SUPERFICIE[exercicioId];
+    if (!respostas) return res.status(400).json({ correto: false, erro: 'Exercício desconhecido' });
+
+    let correto = false;
+    let acertos = 0;
+    let erros   = [];
+    let total   = 0;
+
+    if (respostas === 'drag') {
+        const items = exercicioId === 'sup7' ? ITEMS_DRAG_SUP7 : ITEMS_DRAG_SUP8;
+        total = items.length;
+        items.forEach(item => {
+            if ((classificacao || {})[item.id] === item.correto) { acertos++; }
+            else { erros.push(item.id); }
+        });
+        correto = acertos === total;
+    } else {
+        const normalizada = normalizarRespostaSuperficie(resposta);
+        correto = Array.isArray(respostas)
+            ? respostas.some(r => normalizarRespostaSuperficie(r) === normalizada)
+            : normalizarRespostaSuperficie(respostas) === normalizada;
+    }
+
+    if (correto) {
+        try {
+            await pool.query(
+                'INSERT INTO superficie_progresso (aluno, exercicio_id) VALUES ($1,$2) ON CONFLICT (aluno, exercicio_id) DO UPDATE SET concluido_em = NOW()',
+                [aluno, exercicioId]
+            );
+        } catch (err) { console.error('Erro ao registrar progresso Superfície:', err.message); }
+    }
+
+    res.json(respostas === 'drag' ? { correto, acertos, total, erros } : { correto });
+});
+
+app.post('/superficie/lab/reset', exigirLoginSuperficie, async (req, res) => {
+    const aluno = req.session.superficieAluno;
+    try {
+        await pool.query('DELETE FROM superficie_progresso WHERE aluno=$1', [aluno]);
+        res.json({ sucesso: true, mensagem: `✅ Progresso de ${aluno} no Lab Superfície de Ataque resetado!` });
+    } catch (err) { res.status(500).json({ sucesso: false, erro: err.message }); }
+});
+
 // Inicialização da porta dinâmica (Render ou Local)
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🔥 Servidor do Laboratório iniciado com sucesso na porta ${PORT}`));
