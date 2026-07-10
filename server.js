@@ -5564,6 +5564,598 @@ app.post('/apis/lab/reset', exigirLoginApis, async (req, res) => {
     } catch (err) { res.status(500).json({ sucesso: false, erro: err.message }); }
 });
 
+// =====================================
+// SALA DE GUERRA — Jogo colaborativo em tempo real (Aula 18)
+// =====================================
+
+const QUESTOES_GUERRA = [
+    {
+        id: 'q1',
+        cenario: 'Pedro acessa <code>GET /api/pedidos/100</code> e vê seus próprios dados. Luís descobre que pode acessar <code>GET /api/pedidos/101</code> e ver os dados de Pedro. Qual categoria OWASP descreve esse problema?',
+        opcoes: { A: 'API1 — BOLA (acesso indevido a objetos)', B: 'API2 — Broken Authentication', C: 'API5 — Broken Function Level Auth', D: 'API8 — Security Misconfiguration' },
+        correta: 'A',
+        explicacao: '✅ API1 — BOLA. A API não verifica se o pedido #101 pertence ao usuário que fez a requisição. Trocar IDs na URL é o sinal clássico.'
+    },
+    {
+        id: 'q2',
+        cenario: 'Um endpoint de login <code>POST /api/login</code> não tem nenhum limite de tentativas. Em 1 minuto é possível tentar 10.000 senhas diferentes. Qual categoria OWASP se aplica?',
+        opcoes: { A: 'API1 — BOLA', B: 'API2 — Broken Authentication', C: 'API4 — Unrestricted Resource Consumption', D: 'API6 — Unrestricted Access to Sensitive Flows' },
+        correta: 'C',
+        explicacao: '✅ API4 — Unrestricted Resource Consumption (e também API2 pela falta de proteção no login). O consumo irrestrito de recursos inclui ataques de força bruta sem rate limiting.'
+    },
+    {
+        id: 'q3',
+        cenario: 'A resposta de <code>GET /api/usuarios/me</code> retorna: <em>id, nome, email, cpf, senha_hash, saldo_conta, plano, criado_em</em>. O app mobile só exibe nome e email. O que está errado?',
+        opcoes: { A: 'Nada — a API retorna mais dados, mas o app filtra', B: 'API3 — Excessive Data Exposure. CPF, senha_hash e saldo não deveriam sair da API', C: 'API8 — Misconfiguration no servidor', D: 'API5 — acesso indevido a funções de admin' },
+        correta: 'B',
+        explicacao: '✅ API3 — Excessive Data Exposure (ou API3:2023 Broken Object Property Level Auth). A API jamais deve confiar no cliente para filtrar dados sensíveis.'
+    },
+    {
+        id: 'q4',
+        cenario: 'Qualquer usuário autenticado consegue chamar <code>DELETE /api/admin/users/5</code> e deletar qualquer conta — sem ser administrador. Qual categoria OWASP é essa?',
+        opcoes: { A: 'API1 — BOLA', B: 'API2 — Broken Authentication', C: 'API5 — Broken Function Level Authorization', D: 'API9 — Improper Inventory Management' },
+        correta: 'C',
+        explicacao: '✅ API5 — Broken Function Level Authorization. A rota de admin não verifica o papel do usuário — qualquer pessoa logada vira admin acidentalmente.'
+    },
+    {
+        id: 'q5',
+        cenario: 'Um token JWT é gerado sem campo <code>exp</code> (expiração). O usuário pode usar o mesmo token para sempre, mesmo depois de "sair" do sistema. Qual é a falha?',
+        opcoes: { A: 'API4 — Sem rate limiting no endpoint de token', B: 'API2 — Broken Authentication. Tokens sem expiração são um risco de autenticação', C: 'API8 — Misconfiguration do servidor de identidade', D: 'API1 — BOLA no endpoint de logout' },
+        correta: 'B',
+        explicacao: '✅ API2 — Broken Authentication. Tokens sem expiração permitem que sessões roubadas durem para sempre. Sempre defina `exp` e implemente revogação.'
+    },
+    {
+        id: 'q6',
+        cenario: 'O time planeja a sprint e adiciona a história: <em>"Como dev, quero refatorar os testes unitários do serviço de cálculo de frete (sem mudança de comportamento externo)"</em>. Isso cria nova superfície de ataque de API?',
+        opcoes: { A: 'Sim — qualquer mudança de código cria risco', B: 'Não — refatoração interna sem novos endpoints ou integrações não expõe nova superfície', C: 'Depende do framework usado', D: 'Sim — testes unitários sempre expõem dados' },
+        correta: 'B',
+        explicacao: '✅ Não cria nova superfície. Superfície de ataque de API cresce quando surgem novos endpoints, integrações externas ou dados sensíveis trafegando por novas rotas.'
+    },
+    {
+        id: 'q7',
+        cenario: 'Ao inspecionar o código-fonte do app mobile (engenharia reversa), um pesquisador encontra a API key hardcoded: <code>X-Api-Key: sk-prod-4f8a...</code>. Qual o maior risco imediato?',
+        opcoes: { A: 'Nenhum — a API key está no app, não no servidor', B: 'API8 — Misconfiguration. Qualquer pessoa que descompilar o app tem acesso irrestrito à API', C: 'API4 — Rate limiting. Com a key qualquer um faz scraping', D: 'B e C estão ambos corretos — mas o maior é a exposição da credencial (API8)' },
+        correta: 'D',
+        explicacao: '✅ D — A exposição da credencial é API8/Misconfiguration, e com ela o atacante pode fazer rate limit abuse (API4). Nunca hardcode secrets em clientes.'
+    },
+    {
+        id: 'q8',
+        cenario: 'Durante o teste em homolog, você descobre que <code>GET /api/relatorio-vendas</code> retorna dados de todas as vendas da empresa sem exigir autenticação — basta saber a URL. Como classificar?',
+        opcoes: { A: 'API1 — BOLA (acesso a objeto sem autorização)', B: 'API5 — Broken Function Level Auth. Relatório é função privilegiada, não objeto individual', C: 'API9 — Improper Inventory Management. O endpoint não estava documentado', D: 'API2 — Broken Auth. Faltou token obrigatório' },
+        correta: 'B',
+        explicacao: '✅ API5 — Broken Function Level Auth. O relatório de vendas é uma funcionalidade privilegiada (deveria ser só de admin/gerência) — e não um objeto individual de um usuário.'
+    },
+    {
+        id: 'q9',
+        cenario: 'Em homolog existe o endpoint <code>GET /api/debug/dump-database</code> que exporta todo o banco. Em produção esse endpoint deveria existir?',
+        opcoes: { A: 'Sim — ferramenta de debug é útil em produção também', B: 'Só se estiver protegido por senha', C: 'Não — endpoints de debug nunca devem ir para produção (API9 — Improper Inventory Management)', D: 'Depende da política da empresa' },
+        correta: 'C',
+        explicacao: '✅ API9 — Improper Inventory Management. Endpoints de debug, versões antigas e rotas não documentadas em produção são vetores de ataque que deveriam estar desativados.'
+    },
+    {
+        id: 'q10',
+        cenario: 'Fim de sprint: a equipe detectou 3 vulnerabilidades de API. Qual deve ser a PRIMEIRA a corrigir? 1) JWT sem expiração em todas as rotas 2) Campo "cpf" retornado desnecessariamente em um endpoint 3) Endpoint de admin sem verificação de papel',
+        opcoes: { A: '1 — JWT sem expiração afeta toda a superfície de autenticação', B: '2 — Dado sensível exposto é prioridade LGPD', C: '3 — Escalação de privilégio para admin é o risco mais crítico', D: 'Todas têm a mesma prioridade — corrigir em paralelo' },
+        correta: 'C',
+        explicacao: '✅ C — Broken Function Level Auth (admin sem verificação) é o risco mais crítico: permite que qualquer usuário logado apague contas, acesse dados de todos ou tome controle do sistema.'
+    },
+];
+
+let estadoGuerra = {
+    fase: 'aguardando',   // aguardando | votando | revelado | finalizado
+    rodadaAtual: 0,       // 0 = não iniciado, 1–10 = rodada ativa
+    votos: {},            // { aluno: 'A'|'B'|'C'|'D' } rodada atual
+    historico: [],        // [{ rodada, correta, votos:{...}, pontosGanhos }]
+    pontosTime: 0,
+    acertosPorAluno: {},  // { aluno: count }
+    iniciadoEm: null,
+};
+
+function snapEstadoPublico(aluno) {
+    const q = QUESTOES_GUERRA[estadoGuerra.rodadaAtual - 1] || null;
+    const totalVotos = Object.keys(estadoGuerra.votos).length;
+    const meuVoto   = estadoGuerra.votos[aluno] || null;
+
+    // Distribuição só revelada após resposta
+    let distribuicao = null;
+    if (estadoGuerra.fase === 'revelado' || estadoGuerra.fase === 'finalizado') {
+        distribuicao = { A:0, B:0, C:0, D:0 };
+        Object.values(estadoGuerra.votos).forEach(v => { if (distribuicao[v] !== undefined) distribuicao[v]++; });
+    }
+
+    return {
+        fase:        estadoGuerra.fase,
+        rodadaAtual: estadoGuerra.rodadaAtual,
+        totalRodadas: QUESTOES_GUERRA.length,
+        totalVotos,
+        totalAlunos:  ALUNOS_APIS.length,
+        meuVoto,
+        pontosTime:  estadoGuerra.pontosTime,
+        acertosPorAluno: estadoGuerra.acertosPorAluno,
+        historico:   estadoGuerra.historico,
+        questao: q ? {
+            id:      q.id,
+            cenario: q.cenario,
+            opcoes:  q.opcoes,
+            correta: estadoGuerra.fase === 'revelado' || estadoGuerra.fase === 'finalizado' ? q.correta : null,
+            explicacao: estadoGuerra.fase === 'revelado' || estadoGuerra.fase === 'finalizado' ? q.explicacao : null,
+        } : null,
+        distribuicao,
+        acertouRodada: estadoGuerra.fase === 'revelado' && q ? meuVoto === q.correta : null,
+        votosNomes: estadoGuerra.fase === 'revelado' || estadoGuerra.fase === 'finalizado'
+            ? Object.fromEntries(ALUNOS_APIS.map(a => [a.usuario, estadoGuerra.votos[a.usuario] || null]))
+            : null,
+    };
+}
+
+app.get('/apis/guerra', exigirLoginApis, (req, res) => {
+    const nome = req.session.apisNome;
+    res.send(`<!DOCTYPE html><html lang="pt-BR"><head>
+    <meta charset="UTF-8"><title>Sala de Guerra — APIs</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        * { box-sizing:border-box; margin:0; padding:0; }
+        body { font-family:'IBM Plex Sans',system-ui,sans-serif; background:#0f0e17; color:#fffffe; min-height:100vh; }
+        .topo { display:flex; justify-content:space-between; align-items:center; padding:14px 24px; background:#1a1830; border-bottom:1px solid #2d2a5e; }
+        .topo-brand { font-size:18px; font-weight:800; color:#a78bfa; }
+        .topo-info  { font-size:12px; color:#7c6fcd; }
+        .placar { display:flex; gap:32px; justify-content:center; padding:18px; background:#130f2a; border-bottom:1px solid #2d2a5e; }
+        .placar-item { text-align:center; }
+        .placar-n  { font-size:28px; font-weight:800; color:#a78bfa; line-height:1; }
+        .placar-l  { font-size:10px; color:#7c6fcd; text-transform:uppercase; letter-spacing:.07em; margin-top:3px; }
+        .main { max-width:680px; margin:0 auto; padding:28px 20px; }
+        .aguardando { text-align:center; padding:60px 20px; }
+        .aguardando h2 { font-size:22px; color:#a78bfa; margin-bottom:10px; }
+        .aguardando p  { color:#7c6fcd; font-size:14px; }
+        .pulse { animation: pulse 2s infinite; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+        .cenario-box { background:#1a1830; border:1px solid #2d2a5e; border-radius:14px; padding:22px 24px; margin-bottom:22px; }
+        .rodada-badge { font-size:11px; font-weight:700; color:#a78bfa; background:#2d2a5e; padding:3px 10px; border-radius:999px; display:inline-block; margin-bottom:12px; }
+        .cenario-txt { font-size:15px; line-height:1.7; color:#fffffe; }
+        .cenario-txt code { background:#2d2a5e; padding:2px 7px; border-radius:5px; font-size:13px; color:#a78bfa; }
+        .opcoes { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:20px; }
+        .opcao-btn { background:#1a1830; border:2px solid #2d2a5e; border-radius:12px; padding:16px 14px; cursor:pointer; text-align:left; font-size:13px; color:#fffffe; transition:all .15s; }
+        .opcao-btn:hover:not(:disabled) { border-color:#7C3AED; background:#2d2a5e; }
+        .opcao-btn.selecionado { border-color:#a78bfa; background:#2d2a5e; }
+        .opcao-btn:disabled { cursor:default; }
+        .opcao-btn .letra { font-weight:800; color:#a78bfa; margin-right:6px; }
+        .opcao-btn.correta  { border-color:#22c55e; background:#052e16; }
+        .opcao-btn.errada   { border-color:#ef4444; background:#2d0707; }
+        .opcao-btn.correta .letra { color:#22c55e; }
+        .opcao-btn.errada .letra  { color:#ef4444; }
+        .votos-barra { background:#1a1830; border:1px solid #2d2a5e; border-radius:12px; padding:16px 20px; margin-bottom:20px; }
+        .votos-barra h4 { font-size:12px; color:#7c6fcd; margin-bottom:12px; text-transform:uppercase; letter-spacing:.06em; }
+        .barra-row { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+        .barra-letra { font-size:12px; font-weight:700; color:#a78bfa; width:16px; }
+        .barra-track { flex:1; height:8px; background:#2d2a5e; border-radius:999px; overflow:hidden; }
+        .barra-fill  { height:100%; background:#7C3AED; border-radius:999px; transition:width .4s; }
+        .barra-count { font-size:12px; color:#7c6fcd; width:20px; text-align:right; }
+        .resultado-box { background:#0d2a18; border:2px solid #22c55e; border-radius:14px; padding:20px 24px; margin-bottom:20px; }
+        .resultado-box.errou { background:#2d0707; border-color:#ef4444; }
+        .resultado-titulo { font-size:22px; font-weight:800; margin-bottom:8px; }
+        .resultado-exp  { font-size:13px; line-height:1.6; color:#fffffe; opacity:.85; }
+        .votos-nomes { margin-top:14px; display:flex; flex-wrap:wrap; gap:6px; }
+        .voto-chip   { font-size:11px; padding:3px 10px; border-radius:999px; font-weight:600; }
+        .voto-certo  { background:#052e16; color:#22c55e; border:1px solid #22c55e; }
+        .voto-errado { background:#2d0707; color:#ef4444; border:1px solid #ef4444; }
+        .voto-sem    { background:#1a1830; color:#7c6fcd; border:1px solid #2d2a5e; }
+        .votando-status { text-align:center; font-size:13px; color:#7c6fcd; margin-bottom:14px; }
+        .final-box  { text-align:center; padding:40px 20px; }
+        .final-titulo { font-size:26px; font-weight:800; color:#a78bfa; margin-bottom:8px; }
+        .final-sub    { font-size:14px; color:#7c6fcd; margin-bottom:28px; }
+        .ranking { list-style:none; max-width:400px; margin:0 auto; }
+        .ranking li { display:flex; justify-content:space-between; align-items:center; background:#1a1830; border:1px solid #2d2a5e; border-radius:10px; padding:12px 18px; margin-bottom:8px; }
+        .rank-pos  { font-size:18px; width:30px; }
+        .rank-nome { font-size:14px; font-weight:600; color:#fffffe; flex:1; padding:0 10px; }
+        .rank-pts  { font-size:14px; font-weight:800; color:#a78bfa; }
+    </style>
+</head><body>
+    <div class="topo">
+        <div class="topo-brand">⚔️ Sala de Guerra</div>
+        <div class="topo-info">👤 ${escapeHtml(nome)} &nbsp;|&nbsp; <a href="/apis/lab" style="color:#7c6fcd;font-size:11px;">← Lab</a></div>
+    </div>
+    <div class="placar">
+        <div class="placar-item"><div class="placar-n" id="pts-time">0</div><div class="placar-l">Pontos do Time</div></div>
+        <div class="placar-item"><div class="placar-n" id="rodada-atual">—</div><div class="placar-l">Rodada</div></div>
+        <div class="placar-item"><div class="placar-n" id="votos-count">0</div><div class="placar-l">Votaram</div></div>
+    </div>
+    <div class="main" id="main-conteudo">
+        <div class="aguardando">
+            <h2 class="pulse">⏳ Aguardando o professor iniciar o jogo...</h2>
+            <p>Quando a primeira rodada começar, a pergunta aparecerá aqui.</p>
+        </div>
+    </div>
+    <script>
+    const MEU_ALUNO = '${req.session.apisAluno}';
+    let estadoAnterior = null;
+
+    function renderAguardando() {
+        document.getElementById('main-conteudo').innerHTML = \`
+            <div class="aguardando">
+                <h2 class="pulse">⏳ Aguardando o professor iniciar o jogo...</h2>
+                <p>Quando a primeira rodada começar, a pergunta aparecerá aqui.</p>
+            </div>\`;
+    }
+
+    function renderVotando(estado) {
+        const q = estado.questao;
+        const jaVotei = !!estado.meuVoto;
+        const opts = ['A','B','C','D'];
+        const total = estado.totalAlunos;
+        document.getElementById('main-conteudo').innerHTML = \`
+            <div class="cenario-box">
+                <div class="rodada-badge">Rodada \${estado.rodadaAtual} de \${estado.totalRodadas}</div>
+                <div class="cenario-txt">\${q.cenario}</div>
+            </div>
+            <div class="opcoes">
+                \${opts.map(l => \`<button class="opcao-btn \${estado.meuVoto===l?'selecionado':''}" id="btn-\${l}"
+                    onclick="votar('\${l}')" \${jaVotei?'disabled':''}>
+                    <span class="letra">\${l}</span>\${q.opcoes[l]}
+                </button>\`).join('')}
+            </div>
+            <div class="votando-status" id="votando-status">
+                \${jaVotei ? '✅ Voto registrado! Aguardando os colegas...' : '⬆️ Clique em uma opção para votar'}
+            </div>
+            <div class="votos-barra">
+                <h4>Votos recebidos: \${estado.totalVotos}/\${total}</h4>
+                <div class="barra-row"><span class="barra-letra">✓</span>
+                    <div class="barra-track"><div class="barra-fill" style="width:\${(estado.totalVotos/total)*100}%"></div></div>
+                    <span class="barra-count">\${estado.totalVotos}</span>
+                </div>
+            </div>\`;
+    }
+
+    function renderRevelado(estado) {
+        const q = estado.questao;
+        const acertei = estado.acertouRodada;
+        const dist = estado.distribuicao || {};
+        const total = estado.totalAlunos;
+        const corretosCount = dist[q.correta] || 0;
+        const pontosGanhos = estado.historico.length > 0 ? estado.historico[estado.historico.length-1].pontosGanhos : 0;
+        document.getElementById('main-conteudo').innerHTML = \`
+            <div class="resultado-box \${acertei===false?'errou':''}">
+                <div class="resultado-titulo">\${acertei ? '🎯 Você acertou!' : acertei===false ? '❌ Você errou.' : '👁️ Resultado'}</div>
+                <div class="resultado-exp">\${q.explicacao}</div>
+                <div class="votos-nomes" id="votos-nomes-box"></div>
+            </div>
+            <div class="votos-barra">
+                <h4>Distribuição dos votos — \${corretosCount}/\${total} acertaram</h4>
+                \${['A','B','C','D'].map(l => \`
+                <div class="barra-row">
+                    <span class="barra-letra" style="color:\${l===q.correta?'#22c55e':'#a78bfa'}">\${l}</span>
+                    <div class="barra-track"><div class="barra-fill" style="width:\${total>0?((dist[l]||0)/total)*100:0}%;background:\${l===q.correta?'#22c55e':'#7C3AED'}"></div></div>
+                    <span class="barra-count">\${dist[l]||0}</span>
+                </div>\`).join('')}
+            </div>
+            <p style="text-align:center;font-size:13px;color:\${pontosGanhos?'#22c55e':'#ef4444'};font-weight:700;">
+                \${pontosGanhos ? '🏆 +1 ponto para o time!' : '💀 Time não atingiu maioria — sem ponto nesta rodada.'}
+            </p>
+            <p style="text-align:center;font-size:12px;color:#7c6fcd;margin-top:8px;">Aguardando o professor avançar...</p>\`;
+
+        // Preenche chips de votantes
+        if (estado.votosNomes) {
+            const box = document.getElementById('votos-nomes-box');
+            if (box) {
+                const nomeMap = {};
+                \${JSON.stringify(ALUNOS_APIS.map(a=>({u:a.usuario,n:a.nomeExibicao})))}.forEach(a=>nomeMap[a.u]=a.n);
+                Object.entries(estado.votosNomes).forEach(([u, v]) => {
+                    const certo = v === q.correta;
+                    const chip = document.createElement('span');
+                    chip.className = 'voto-chip ' + (v===null?'voto-sem':certo?'voto-certo':'voto-errado');
+                    chip.textContent = (nomeMap[u]||u) + (v ? ' ('+v+')' : ' —');
+                    box.appendChild(chip);
+                });
+            }
+        }
+    }
+
+    function renderFinal(estado) {
+        const alunos = ${JSON.stringify(ALUNOS_APIS.map(a=>({u:a.usuario,n:a.nomeExibicao})))};
+        const ranking = alunos.map(a => ({ nome: a.n, pts: estado.acertosPorAluno[a.u] || 0 }))
+            .sort((a,b) => b.pts - a.pts);
+        const medalhas = ['🥇','🥈','🥉'];
+        const ganhou = estado.pontosTime >= 7;
+        document.getElementById('main-conteudo').innerHTML = \`
+            <div class="final-box">
+                <div class="final-titulo">\${ganhou ? '🏆 Time Vencedor!' : '💀 Próxima vez!'}</div>
+                <div class="final-sub">\${estado.pontosTime}/\${estado.totalRodadas} pontos coletivos</div>
+                <ul class="ranking">
+                    \${ranking.map((r, i) => \`<li>
+                        <span class="rank-pos">\${medalhas[i]||'  '}</span>
+                        <span class="rank-nome">\${r.nome}</span>
+                        <span class="rank-pts">\${r.pts}/\${estado.totalRodadas}</span>
+                    </li>\`).join('')}
+                </ul>
+            </div>\`;
+    }
+
+    function render(estado) {
+        document.getElementById('pts-time').textContent = estado.pontosTime;
+        document.getElementById('rodada-atual').textContent = estado.rodadaAtual > 0 ? estado.rodadaAtual + '/' + estado.totalRodadas : '—';
+        document.getElementById('votos-count').textContent = estado.totalVotos + '/' + estado.totalAlunos;
+
+        const faseAnt = estadoAnterior ? estadoAnterior.fase : null;
+        const rodAnt  = estadoAnterior ? estadoAnterior.rodadaAtual : null;
+
+        if (estado.fase === 'aguardando') { renderAguardando(); }
+        else if (estado.fase === 'votando') {
+            if (faseAnt !== 'votando' || rodAnt !== estado.rodadaAtual) { renderVotando(estado); }
+            else {
+                // Atualiza apenas contador de votos
+                const h4 = document.querySelector('.votos-barra h4');
+                if (h4) h4.textContent = 'Votos recebidos: ' + estado.totalVotos + '/' + estado.totalAlunos;
+                const fill = document.querySelector('.barra-fill');
+                if (fill) fill.style.width = (estado.totalVotos / estado.totalAlunos * 100) + '%';
+                const cnt = document.querySelector('.barra-count');
+                if (cnt) cnt.textContent = estado.totalVotos;
+                if (estado.meuVoto && !estadoAnterior?.meuVoto) {
+                    document.querySelectorAll('.opcao-btn').forEach(b => b.disabled = true);
+                    const btn = document.getElementById('btn-' + estado.meuVoto);
+                    if (btn) btn.classList.add('selecionado');
+                    const st = document.getElementById('votando-status');
+                    if (st) st.textContent = '✅ Voto registrado! Aguardando os colegas...';
+                }
+            }
+        }
+        else if (estado.fase === 'revelado') {
+            if (faseAnt !== 'revelado' || rodAnt !== estado.rodadaAtual) { renderRevelado(estado); }
+        }
+        else if (estado.fase === 'finalizado') { renderFinal(estado); }
+
+        estadoAnterior = estado;
+    }
+
+    async function votar(opcao) {
+        try {
+            const r = await fetch('/apis/guerra/votar', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ opcao }) });
+            const res = await r.json();
+            if (res.ok) {
+                document.querySelectorAll('.opcao-btn').forEach(b => b.disabled = true);
+                const btn = document.getElementById('btn-' + opcao);
+                if (btn) btn.classList.add('selecionado');
+                const st = document.getElementById('votando-status');
+                if (st) st.textContent = '✅ Voto registrado! Aguardando os colegas...';
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    async function poll() {
+        try {
+            const r = await fetch('/apis/guerra/estado');
+            const estado = await r.json();
+            render(estado);
+        } catch(e) { console.error(e); }
+    }
+
+    poll();
+    setInterval(poll, 2000);
+    </script>
+</body></html>`);
+});
+
+app.get('/apis/guerra/estado', exigirLoginApis, (req, res) => {
+    res.json(snapEstadoPublico(req.session.apisAluno));
+});
+
+app.post('/apis/guerra/votar', exigirLoginApis, (req, res) => {
+    const aluno = req.session.apisAluno;
+    const { opcao } = req.body;
+    if (estadoGuerra.fase !== 'votando') return res.json({ ok: false, erro: 'Fora do período de votação' });
+    if (!['A','B','C','D'].includes(opcao)) return res.json({ ok: false, erro: 'Opção inválida' });
+    estadoGuerra.votos[aluno] = opcao;
+    res.json({ ok: true });
+});
+
+app.get('/apis/guerra/painel', (req, res) => {
+    res.send(`<!DOCTYPE html><html lang="pt-BR"><head>
+    <meta charset="UTF-8"><title>Painel Professor — Sala de Guerra</title>
+    <style>
+        * { box-sizing:border-box; margin:0; padding:0; }
+        body { font-family:system-ui,sans-serif; background:#0f0e17; color:#fffffe; min-height:100vh; padding:28px; }
+        h1 { color:#a78bfa; margin-bottom:4px; }
+        .sub { color:#7c6fcd; font-size:13px; margin-bottom:22px; }
+        .controles { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:24px; }
+        .btn { padding:12px 22px; border:none; border-radius:10px; font-size:14px; font-weight:700; cursor:pointer; transition:opacity .15s; }
+        .btn:hover { opacity:.85; }
+        .btn-iniciar  { background:#7C3AED; color:white; }
+        .btn-revelar  { background:#f59e0b; color:white; }
+        .btn-proximo  { background:#22c55e; color:#052e16; }
+        .btn-reset    { background:#ef4444; color:white; }
+        .btn:disabled { opacity:.35; cursor:default; }
+        .painel-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+        .card { background:#1a1830; border:1px solid #2d2a5e; border-radius:14px; padding:20px; }
+        .card h3 { font-size:14px; color:#a78bfa; margin-bottom:14px; }
+        .questao-box { background:#130f2a; border-radius:10px; padding:14px; font-size:13px; line-height:1.7; margin-bottom:14px; }
+        .questao-box code { background:#2d2a5e; padding:2px 6px; border-radius:4px; color:#a78bfa; }
+        .dist-row { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+        .dist-letra { font-weight:800; color:#a78bfa; width:20px; }
+        .dist-track { flex:1; height:10px; background:#2d2a5e; border-radius:999px; overflow:hidden; }
+        .dist-fill  { height:100%; background:#7C3AED; border-radius:999px; transition:width .4s; }
+        .dist-count { font-size:12px; color:#7c6fcd; width:24px; text-align:right; }
+        .alunos-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+        .aluno-chip { background:#130f2a; border:1px solid #2d2a5e; border-radius:8px; padding:8px 10px; font-size:12px; text-align:center; }
+        .aluno-chip.votou { border-color:#a78bfa; }
+        .aluno-chip .chip-voto { font-weight:800; color:#a78bfa; font-size:14px; }
+        .placar-row { display:flex; justify-content:space-around; background:#130f2a; border-radius:10px; padding:14px; margin-bottom:16px; }
+        .placar-item { text-align:center; }
+        .placar-n  { font-size:26px; font-weight:800; color:#a78bfa; line-height:1; }
+        .placar-l  { font-size:10px; color:#7c6fcd; text-transform:uppercase; margin-top:3px; }
+        .historico-item { font-size:12px; color:#7c6fcd; padding:6px 0; border-bottom:1px solid #2d2a5e; display:flex; justify-content:space-between; }
+        #status-poll { font-size:11px; color:#7c6fcd; margin-top:10px; }
+    </style>
+</head><body>
+    <h1>⚔️ Sala de Guerra — Painel do Professor</h1>
+    <div class="sub">Segurança em APIs · Aula 18 · Polling a cada 2s</div>
+
+    <div class="controles">
+        <button class="btn btn-iniciar"  id="btn-ini"  onclick="controle('iniciar')">▶ Iniciar Jogo</button>
+        <button class="btn btn-revelar"  id="btn-rev"  onclick="controle('revelar')" disabled>👁 Revelar Resposta</button>
+        <button class="btn btn-proximo"  id="btn-prox" onclick="controle('proximo')" disabled>⏭ Próxima Rodada</button>
+        <button class="btn btn-reset"    id="btn-rst"  onclick="controle('reset')">🔄 Resetar Jogo</button>
+    </div>
+
+    <div class="painel-grid">
+        <div class="card">
+            <h3>📊 Estado Atual</h3>
+            <div class="placar-row">
+                <div class="placar-item"><div class="placar-n" id="p-pts">0</div><div class="placar-l">Pontos Time</div></div>
+                <div class="placar-item"><div class="placar-n" id="p-rod">—</div><div class="placar-l">Rodada</div></div>
+                <div class="placar-item"><div class="placar-n" id="p-fase">—</div><div class="placar-l">Fase</div></div>
+            </div>
+            <div class="questao-box" id="questao-texto">Nenhuma questão ativa.</div>
+            <div id="dist-votos">
+                ${['A','B','C','D'].map(l => `<div class="dist-row">
+                    <span class="dist-letra">${l}</span>
+                    <div class="dist-track"><div class="dist-fill" id="df-${l}" style="width:0%"></div></div>
+                    <span class="dist-count" id="dc-${l}">0</span>
+                </div>`).join('')}
+            </div>
+        </div>
+        <div class="card">
+            <h3>👥 Votos dos Alunos</h3>
+            <div class="alunos-grid" id="alunos-grid">
+                ${ALUNOS_APIS.map(a => `<div class="aluno-chip" id="chip-${a.usuario}">
+                    <div style="font-size:11px;color:#7c6fcd;">${a.nomeExibicao}</div>
+                    <div class="chip-voto" id="voto-${a.usuario}">—</div>
+                </div>`).join('')}
+            </div>
+            <div id="status-poll">🟡 Aguardando...</div>
+        </div>
+    </div>
+
+    <div class="card" style="margin-top:20px;">
+        <h3>📜 Histórico de Rodadas</h3>
+        <div id="historico-lista"><p style="color:#7c6fcd;font-size:12px;">Nenhuma rodada concluída ainda.</p></div>
+    </div>
+
+    <script>
+    const TOTAL_ALUNOS = ${ALUNOS_APIS.length};
+    const NOMES = ${JSON.stringify(Object.fromEntries(ALUNOS_APIS.map(a=>[a.usuario,a.nomeExibicao])))};
+    const QUESTOES = ${JSON.stringify(QUESTOES_GUERRA.map(q=>({id:q.id,cenario:q.cenario,opcoes:q.opcoes,correta:q.correta,explicacao:q.explicacao})))};
+
+    async function controle(acao) {
+        await fetch('/apis/guerra/controle', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ acao }) });
+        await poll();
+    }
+
+    function atualizarBotoes(fase) {
+        document.getElementById('btn-ini').disabled  = fase !== 'aguardando' && fase !== 'finalizado';
+        document.getElementById('btn-rev').disabled  = fase !== 'votando';
+        document.getElementById('btn-prox').disabled = fase !== 'revelado';
+        document.getElementById('btn-rst').disabled  = false;
+    }
+
+    async function poll() {
+        try {
+            const r = await fetch('/apis/guerra/controle-estado');
+            const estado = await r.json();
+
+            document.getElementById('p-pts').textContent  = estado.pontosTime;
+            document.getElementById('p-rod').textContent  = estado.rodadaAtual > 0 ? estado.rodadaAtual + '/' + QUESTOES.length : '—';
+            document.getElementById('p-fase').textContent = estado.fase;
+            atualizarBotoes(estado.fase);
+
+            const q = estado.rodadaAtual > 0 ? QUESTOES[estado.rodadaAtual - 1] : null;
+            document.getElementById('questao-texto').innerHTML = q ? q.cenario : 'Nenhuma questão ativa.';
+
+            const dist = {A:0,B:0,C:0,D:0};
+            Object.values(estado.votos).forEach(v => { if (dist[v]!==undefined) dist[v]++; });
+            ['A','B','C','D'].forEach(l => {
+                const pct = TOTAL_ALUNOS > 0 ? (dist[l]/TOTAL_ALUNOS)*100 : 0;
+                const fill = document.getElementById('df-'+l);
+                const cnt  = document.getElementById('dc-'+l);
+                if (fill) { fill.style.width = pct+'%'; fill.style.background = (q && l===q.correta) ? '#22c55e' : '#7C3AED'; }
+                if (cnt)  cnt.textContent = dist[l];
+            });
+
+            Object.entries(NOMES).forEach(([u, nome]) => {
+                const chip = document.getElementById('chip-'+u);
+                const voto = document.getElementById('voto-'+u);
+                const v = estado.votos[u] || null;
+                if (chip) chip.classList.toggle('votou', !!v);
+                if (voto) voto.textContent = v || '—';
+            });
+
+            const hist = document.getElementById('historico-lista');
+            if (estado.historico.length > 0) {
+                hist.innerHTML = estado.historico.map(h => {
+                    const qh = QUESTOES[h.rodada-1];
+                    const corretos = Object.values(h.votos).filter(v=>v===h.correta).length;
+                    return \`<div class="historico-item">
+                        <span>R\${h.rodada}: \${qh ? qh.opcoes[h.correta].substring(0,40)+'...' : ''}</span>
+                        <span style="color:\${h.pontosGanhos?'#22c55e':'#ef4444'};">\${corretos}/\${TOTAL_ALUNOS} corretos · \${h.pontosGanhos?'+1 ponto':'sem ponto'}</span>
+                    </div>\`;
+                }).reverse().join('');
+            }
+
+            document.getElementById('status-poll').textContent = '🟢 Atualizado: ' + new Date().toLocaleTimeString('pt-BR');
+        } catch(e) { document.getElementById('status-poll').textContent = '🔴 Falha: ' + e.message; }
+    }
+
+    poll();
+    setInterval(poll, 2000);
+    </script>
+</body></html>`);
+});
+
+app.get('/apis/guerra/controle-estado', (req, res) => {
+    res.json({
+        fase:        estadoGuerra.fase,
+        rodadaAtual: estadoGuerra.rodadaAtual,
+        votos:       estadoGuerra.votos,
+        historico:   estadoGuerra.historico,
+        pontosTime:  estadoGuerra.pontosTime,
+        acertosPorAluno: estadoGuerra.acertosPorAluno,
+    });
+});
+
+app.post('/apis/guerra/controle', (req, res) => {
+    const { acao } = req.body;
+
+    if (acao === 'reset') {
+        estadoGuerra = { fase:'aguardando', rodadaAtual:0, votos:{}, historico:[], pontosTime:0, acertosPorAluno:{}, iniciadoEm:null };
+        return res.json({ ok: true });
+    }
+
+    if (acao === 'iniciar') {
+        if (estadoGuerra.fase === 'aguardando' || estadoGuerra.fase === 'finalizado') {
+            estadoGuerra = { fase:'votando', rodadaAtual:1, votos:{}, historico:[], pontosTime:0, acertosPorAluno:{}, iniciadoEm: Date.now() };
+            return res.json({ ok: true });
+        }
+    }
+
+    if (acao === 'revelar') {
+        if (estadoGuerra.fase !== 'votando') return res.json({ ok: false });
+        const q = QUESTOES_GUERRA[estadoGuerra.rodadaAtual - 1];
+        const corretos = Object.values(estadoGuerra.votos).filter(v => v === q.correta).length;
+        const pontosGanhos = corretos >= Math.ceil(ALUNOS_APIS.length / 2) ? 1 : 0;
+        estadoGuerra.pontosTime += pontosGanhos;
+        // Atualiza acertos por aluno
+        Object.entries(estadoGuerra.votos).forEach(([aluno, voto]) => {
+            if (voto === q.correta) {
+                estadoGuerra.acertosPorAluno[aluno] = (estadoGuerra.acertosPorAluno[aluno] || 0) + 1;
+            }
+        });
+        estadoGuerra.historico.push({ rodada: estadoGuerra.rodadaAtual, correta: q.correta, votos: {...estadoGuerra.votos}, pontosGanhos });
+        estadoGuerra.fase = 'revelado';
+        return res.json({ ok: true });
+    }
+
+    if (acao === 'proximo') {
+        if (estadoGuerra.fase !== 'revelado') return res.json({ ok: false });
+        if (estadoGuerra.rodadaAtual >= QUESTOES_GUERRA.length) {
+            estadoGuerra.fase = 'finalizado';
+        } else {
+            estadoGuerra.rodadaAtual++;
+            estadoGuerra.votos = {};
+            estadoGuerra.fase = 'votando';
+        }
+        return res.json({ ok: true });
+    }
+
+    res.json({ ok: false, erro: 'Ação desconhecida' });
+});
+
 // Inicialização da porta dinâmica (Render ou Local)
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🔥 Servidor do Laboratório iniciado com sucesso na porta ${PORT}`));
