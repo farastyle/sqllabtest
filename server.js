@@ -5301,7 +5301,7 @@ const scriptApis = `
             const res = await r.json();
             const link = document.getElementById('link-guerra');
             if (!link) return;
-            if (res.fase === 'sala_aberta' || res.fase === 'votando' || res.fase === 'revelado' || res.fase === 'finalizado') {
+            if (res.fase === 'sala_aberta' || res.fase === 'escolhendo' || res.fase === 'revelado' || res.fase === 'finalizado') {
                 link.classList.remove('btn-guerra--locked');
                 link.classList.add('btn-guerra--ativo');
                 link.removeAttribute('aria-disabled');
@@ -5596,122 +5596,175 @@ app.post('/apis/lab/reset', exigirLoginApis, async (req, res) => {
 // SALA DE GUERRA — Jogo colaborativo em tempo real (Aula 18)
 // =====================================
 
-const QUESTOES_GUERRA = [
+const PUZZLES_GUERRA = [
     {
-        id: 'q1',
-        cenario: 'Pedro acessa <code>GET /api/pedidos/100</code> e vê seus próprios dados. Luís descobre que pode acessar <code>GET /api/pedidos/101</code> e ver os dados de Pedro. Qual categoria OWASP descreve esse problema?',
-        opcoes: { A: 'API1 — BOLA (acesso indevido a objetos)', B: 'API2 — Broken Authentication', C: 'API5 — Broken Function Level Auth', D: 'API8 — Security Misconfiguration' },
-        correta: 'A',
-        explicacao: '✅ API1 — BOLA. A API não verifica se o pedido #101 pertence ao usuário que fez a requisição. Trocar IDs na URL é o sinal clássico.'
+        id: 'p1',
+        titulo: 'API Bancária em Produção',
+        cenario: 'Sua equipe é responsável pela segurança da API de transferências de uma fintech. O endpoint principal é <code>POST /api/transferencias</code>. Montem juntos a camada de proteção — cada um escolhe UMA medida. Coordenem-se para não repetir!',
+        dica: 'Cuidado com as armadilhas: nem toda opção é segura. Falem uns com os outros antes de confirmar.',
+        pecas: [
+            { id:'a', texto: 'Rate limiting: máximo de 5 req/min por usuário autenticado',                   correta: true  },
+            { id:'b', texto: 'Token JWT com campo exp de 15 minutos + rotação no refresh',                   correta: true  },
+            { id:'c', texto: 'Validação de schema (tipo, formato, limites) em todos os campos de entrada',   correta: true  },
+            { id:'d', texto: 'HTTPS obrigatório com HSTS habilitado em todos os endpoints',                  correta: true  },
+            { id:'e', texto: 'Log de auditoria imutável para cada transferência (quem, quando, valor)',       correta: true  },
+            { id:'f', texto: 'Verificar que o saldo debitado pertence ao usuário logado antes de processar', correta: true  },
+            { id:'g', texto: 'GET /api/contas/{id}/saldo retorna o saldo sem checar se {id} é do usuário',  correta: false },
+            { id:'h', texto: 'Tokens sem exp para melhorar experiência — o usuário decide quando sair',      correta: false },
+            { id:'i', texto: 'Endpoint /api/debug/transacoes mantido em produção para suporte técnico',      correta: false },
+            { id:'j', texto: 'API key fixa no código do app mobile para identificar o cliente',              correta: false },
+            { id:'k', texto: 'Mensagens de erro detalham qual campo falhou e mostram o valor recebido',      correta: false },
+            { id:'l', texto: 'DELETE /api/admin/usuarios/{id} aceita qualquer token JWT válido',             correta: false },
+        ],
+        explicacao: 'As 6 medidas corretas protegem contra API1 (verificar ownership), API2 (JWT com exp), API3 (sem exposição), API4 (rate limiting + HTTPS) e API8 (logs). As armadilhas a-g são falhas clássicas do OWASP API Top 10.',
+        metaAcertos: 4,
     },
     {
-        id: 'q2',
-        cenario: 'Um endpoint de login <code>POST /api/login</code> não tem nenhum limite de tentativas. Em 1 minuto é possível tentar 10.000 senhas diferentes. Qual categoria OWASP se aplica?',
-        opcoes: { A: 'API1 — BOLA', B: 'API2 — Broken Authentication', C: 'API4 — Unrestricted Resource Consumption', D: 'API6 — Unrestricted Access to Sensitive Flows' },
-        correta: 'C',
-        explicacao: '✅ API4 — Unrestricted Resource Consumption (e também API2 pela falta de proteção no login). O consumo irrestrito de recursos inclui ataques de força bruta sem rate limiting.'
+        id: 'p2',
+        titulo: 'E-commerce — Fluxo de Checkout',
+        cenario: 'Vocês estão revisando a segurança do checkout de uma loja online. O fluxo envolve <code>POST /api/pedidos</code>, <code>GET /api/pedidos/{id}</code> e <code>POST /api/pagamentos</code>. Que medidas garantem um checkout seguro?',
+        dica: 'Algumas opções parecem "convenientes" mas abrem brechas sérias. Discutam antes de escolher.',
+        pecas: [
+            { id:'a', texto: 'Verificar que pedido/{id} pertence ao usuário logado antes de retornar ou modificar', correta: true  },
+            { id:'b', texto: 'Exigir reautenticação (senha ou 2FA) para pagamentos acima de R$500',                 correta: true  },
+            { id:'c', texto: 'Validar no servidor que preços não foram adulterados (nunca confiar no front)',        correta: true  },
+            { id:'d', texto: 'Idempotência no endpoint de pagamento para evitar cobrança dupla',                    correta: true  },
+            { id:'e', texto: 'Rota GET /api/admin/relatorio-vendas exige papel "gerente" ou superior',              correta: true  },
+            { id:'f', texto: 'Remover headers de debug (X-Powered-By, Server: Express) das respostas HTTP',         correta: true  },
+            { id:'g', texto: 'Campo coupon_code aplica 100% de desconto se enviado como null',                      correta: false },
+            { id:'h', texto: 'POST /api/pedidos retorna objeto completo incluindo dados de cartão mascarados',       correta: false },
+            { id:'i', texto: 'Rota /api/admin/relatorio disponível para qualquer usuário logado — "é interno"',     correta: false },
+            { id:'j', texto: 'Token de sessão sem expiração para não interromper o checkout',                       correta: false },
+            { id:'k', texto: 'Sem rate limiting em /api/pagamentos — "usuário legítimo paga uma vez"',              correta: false },
+            { id:'l', texto: 'Versão antiga /api/v1/pedidos mantida sem autenticação para compatibilidade',         correta: false },
+        ],
+        explicacao: 'Corretas cobrem API1 (ownership de pedidos), API2 (reautenticação), API3 (sem vazar dados), API5 (admin protegido) e API8 (headers). As armadilhas exploram API2, API4, API5 e API9.',
+        metaAcertos: 4,
     },
     {
-        id: 'q3',
-        cenario: 'A resposta de <code>GET /api/usuarios/me</code> retorna: <em>id, nome, email, cpf, senha_hash, saldo_conta, plano, criado_em</em>. O app mobile só exibe nome e email. O que está errado?',
-        opcoes: { A: 'Nada — a API retorna mais dados, mas o app filtra', B: 'API3 — Excessive Data Exposure. CPF, senha_hash e saldo não deveriam sair da API', C: 'API8 — Misconfiguration no servidor', D: 'API5 — acesso indevido a funções de admin' },
-        correta: 'B',
-        explicacao: '✅ API3 — Excessive Data Exposure (ou API3:2023 Broken Object Property Level Auth). A API jamais deve confiar no cliente para filtrar dados sensíveis.'
+        id: 'p3',
+        titulo: 'SaaS B2B — Isolamento de Clientes',
+        cenario: 'Plataforma B2B com múltiplos clientes (tenants). Cada empresa tem seus próprios dados. A API usa <code>tenant_id</code> no header e IDs numéricos sequenciais nos recursos. Que medidas garantem o isolamento entre clientes?',
+        dica: 'Em multitenancy, o maior risco é um cliente acessar dados de outro. Pensem nos vetores.',
+        pecas: [
+            { id:'a', texto: 'Sempre filtrar queries por tenant_id extraído do token JWT (nunca do header)',       correta: true  },
+            { id:'b', texto: 'Usar UUIDs em vez de IDs sequenciais para tornar IDs não previsíveis',              correta: true  },
+            { id:'c', texto: 'Verificar que recursos acessados pertencem ao tenant do usuário logado',             correta: true  },
+            { id:'d', texto: 'Rate limiting por tenant para evitar que um cliente esgote recursos dos outros',     correta: true  },
+            { id:'e', texto: 'Inventário documentado de todos os endpoints com versão, auth e tenant-scope',       correta: true  },
+            { id:'f', texto: 'Desativar endpoints de versões antigas sem suporte ativo',                           correta: true  },
+            { id:'g', texto: 'tenant_id aceito do header X-Tenant-ID enviado pelo cliente para "flexibilidade"',  correta: false },
+            { id:'h', texto: 'IDs sequenciais expostos na URL — "o cliente precisa saber o ID do recurso"',       correta: false },
+            { id:'i', texto: 'Sem limite de req por tenant — "o cliente pagou pelo plano"',                       correta: false },
+            { id:'j', texto: 'GET /api/v2/relatorio aceita token de qualquer tenant — filtro é feito no front',   correta: false },
+            { id:'k', texto: 'Endpoint /api/v1/export mantido como "legado" sem autenticação',                    correta: false },
+            { id:'l', texto: 'Admin pode ver dados de qualquer tenant passando ?tenant= na query string',         correta: false },
+        ],
+        explicacao: 'Corretas endereçam API1 (tenant scope), API4 (resource consumption), API9 (inventory). As armadilhas representam os vetores clássicos de vazamento cross-tenant.',
+        metaAcertos: 4,
     },
     {
-        id: 'q4',
-        cenario: 'Qualquer usuário autenticado consegue chamar <code>DELETE /api/admin/users/5</code> e deletar qualquer conta — sem ser administrador. Qual categoria OWASP é essa?',
-        opcoes: { A: 'API1 — BOLA', B: 'API2 — Broken Authentication', C: 'API5 — Broken Function Level Authorization', D: 'API9 — Improper Inventory Management' },
-        correta: 'C',
-        explicacao: '✅ API5 — Broken Function Level Authorization. A rota de admin não verifica o papel do usuário — qualquer pessoa logada vira admin acidentalmente.'
+        id: 'p4',
+        titulo: 'App Mobile — Autenticação Segura',
+        cenario: 'App mobile de banco com 2 milhões de usuários. Fluxo: login → token → operações. Um pentest revelou que tokens vazados permanecem válidos indefinidamente e não há proteção em fluxos sensíveis. Que medidas fecham as brechas?',
+        dica: 'Pense no ciclo de vida do token e nos fluxos sensíveis além do login principal.',
+        pecas: [
+            { id:'a', texto: 'Access token com exp de 15min + refresh token de 7 dias com rotação obrigatória',   correta: true  },
+            { id:'b', texto: 'Lista de revogação de tokens consultada em cada requisição crítica',                 correta: true  },
+            { id:'c', texto: 'Rate limiting com bloqueio progressivo no login (5 falhas → 15 min bloqueado)',      correta: true  },
+            { id:'d', texto: 'Reautenticação biométrica/PIN para operações de alto risco (Pix, troca de senha)',   correta: true  },
+            { id:'e', texto: 'Certificate pinning no app para impedir proxies maliciosos de capturar tokens',      correta: true  },
+            { id:'f', texto: 'Notificação push ao usuário a cada novo login com geolocalização aproximada',        correta: true  },
+            { id:'g', texto: 'Token de acesso válido por 30 dias para não "frustrar" o usuário com logout',       correta: false },
+            { id:'h', texto: 'Sem bloqueio no login — usuário com typo não deveria ser penalizado',               correta: false },
+            { id:'i', texto: 'Pix sem reautenticação — o usuário já está logado no app',                          correta: false },
+            { id:'j', texto: 'Refresh token eterno armazenado em localStorage do WebView',                        correta: false },
+            { id:'k', texto: 'Usuário pode transferir para qualquer conta sem 2FA via /api/transferir',           correta: false },
+            { id:'l', texto: 'Credenciais de API de notificação (FCM key) hardcoded no bundle do app',            correta: false },
+        ],
+        explicacao: 'Corretas cobrem API2 (tokens com vida curta + revogação + rate limit) e API6 (reautenticação em fluxos sensíveis). As armadilhas representam os erros mais comuns em autenticação mobile.',
+        metaAcertos: 4,
     },
     {
-        id: 'q5',
-        cenario: 'Um token JWT é gerado sem campo <code>exp</code> (expiração). O usuário pode usar o mesmo token para sempre, mesmo depois de "sair" do sistema. Qual é a falha?',
-        opcoes: { A: 'API4 — Sem rate limiting no endpoint de token', B: 'API2 — Broken Authentication. Tokens sem expiração são um risco de autenticação', C: 'API8 — Misconfiguration do servidor de identidade', D: 'API1 — BOLA no endpoint de logout' },
-        correta: 'B',
-        explicacao: '✅ API2 — Broken Authentication. Tokens sem expiração permitem que sessões roubadas durem para sempre. Sempre defina `exp` e implemente revogação.'
-    },
-    {
-        id: 'q6',
-        cenario: 'O time planeja a sprint e adiciona a história: <em>"Como dev, quero refatorar os testes unitários do serviço de cálculo de frete (sem mudança de comportamento externo)"</em>. Isso cria nova superfície de ataque de API?',
-        opcoes: { A: 'Sim — qualquer mudança de código cria risco', B: 'Não — refatoração interna sem novos endpoints ou integrações não expõe nova superfície', C: 'Depende do framework usado', D: 'Sim — testes unitários sempre expõem dados' },
-        correta: 'B',
-        explicacao: '✅ Não cria nova superfície. Superfície de ataque de API cresce quando surgem novos endpoints, integrações externas ou dados sensíveis trafegando por novas rotas.'
-    },
-    {
-        id: 'q7',
-        cenario: 'Ao inspecionar o código-fonte do app mobile (engenharia reversa), um pesquisador encontra a API key hardcoded: <code>X-Api-Key: sk-prod-4f8a...</code>. Qual o maior risco imediato?',
-        opcoes: { A: 'Nenhum — a API key está no app, não no servidor', B: 'API8 — Misconfiguration. Qualquer pessoa que descompilar o app tem acesso irrestrito à API', C: 'API4 — Rate limiting. Com a key qualquer um faz scraping', D: 'B e C estão ambos corretos — mas o maior é a exposição da credencial (API8)' },
-        correta: 'D',
-        explicacao: '✅ D — A exposição da credencial é API8/Misconfiguration, e com ela o atacante pode fazer rate limit abuse (API4). Nunca hardcode secrets em clientes.'
-    },
-    {
-        id: 'q8',
-        cenario: 'Durante o teste em homolog, você descobre que <code>GET /api/relatorio-vendas</code> retorna dados de todas as vendas da empresa sem exigir autenticação — basta saber a URL. Como classificar?',
-        opcoes: { A: 'API1 — BOLA (acesso a objeto sem autorização)', B: 'API5 — Broken Function Level Auth. Relatório é função privilegiada, não objeto individual', C: 'API9 — Improper Inventory Management. O endpoint não estava documentado', D: 'API2 — Broken Auth. Faltou token obrigatório' },
-        correta: 'B',
-        explicacao: '✅ API5 — Broken Function Level Auth. O relatório de vendas é uma funcionalidade privilegiada (deveria ser só de admin/gerência) — e não um objeto individual de um usuário.'
-    },
-    {
-        id: 'q9',
-        cenario: 'Em homolog existe o endpoint <code>GET /api/debug/dump-database</code> que exporta todo o banco. Em produção esse endpoint deveria existir?',
-        opcoes: { A: 'Sim — ferramenta de debug é útil em produção também', B: 'Só se estiver protegido por senha', C: 'Não — endpoints de debug nunca devem ir para produção (API9 — Improper Inventory Management)', D: 'Depende da política da empresa' },
-        correta: 'C',
-        explicacao: '✅ API9 — Improper Inventory Management. Endpoints de debug, versões antigas e rotas não documentadas em produção são vetores de ataque que deveriam estar desativados.'
-    },
-    {
-        id: 'q10',
-        cenario: 'Fim de sprint: a equipe detectou 3 vulnerabilidades de API. Qual deve ser a PRIMEIRA a corrigir? 1) JWT sem expiração em todas as rotas 2) Campo "cpf" retornado desnecessariamente em um endpoint 3) Endpoint de admin sem verificação de papel',
-        opcoes: { A: '1 — JWT sem expiração afeta toda a superfície de autenticação', B: '2 — Dado sensível exposto é prioridade LGPD', C: '3 — Escalação de privilégio para admin é o risco mais crítico', D: 'Todas têm a mesma prioridade — corrigir em paralelo' },
-        correta: 'C',
-        explicacao: '✅ C — Broken Function Level Auth (admin sem verificação) é o risco mais crítico: permite que qualquer usuário logado apague contas, acesse dados de todos ou tome controle do sistema.'
+        id: 'p5',
+        titulo: 'Microsserviços — Superfície Interna',
+        cenario: 'Sistema com 8 microsserviços internos comunicando-se via REST. Nenhum é exposto diretamente — todos passam pelo API Gateway. Um pentest encontrou que qualquer serviço pode chamar qualquer outro sem autenticação. Que medidas aplicar?',
+        dica: 'Comunicação interna não significa comunicação segura. Assumam que um serviço pode ser comprometido.',
+        pecas: [
+            { id:'a', texto: 'Service-to-service auth com tokens JWT de curta duração emitidos por IdP interno',   correta: true  },
+            { id:'b', texto: 'Políticas de rede (mTLS ou service mesh) que permitem apenas rotas necessárias',     correta: true  },
+            { id:'c', texto: 'Cada serviço valida e sanitiza dados recebidos de outros serviços internos',          correta: true  },
+            { id:'d', texto: 'Inventário atualizado de todos os serviços, versões e endpoints expostos',            correta: true  },
+            { id:'e', texto: 'Descomissionar serviços legados e endpoints não utilizados há mais de 90 dias',       correta: true  },
+            { id:'f', texto: 'Validar e sanitizar todas as URLs/respostas consumidas de APIs de terceiros',         correta: true  },
+            { id:'g', texto: 'Serviços internos confiam uns nos outros sem auth — "estão na mesma VPC"',            correta: false },
+            { id:'h', texto: 'Serviço A pode chamar qualquer endpoint do Serviço B sem restrição de rota',         correta: false },
+            { id:'i', texto: 'Dados de APIs externas inseridos diretamente no banco sem validação',                 correta: false },
+            { id:'j', texto: 'Endpoints /health e /metrics expostos sem auth na Internet via gateway',              correta: false },
+            { id:'k', texto: 'Versão v1 do serviço de relatórios mantida — "ninguém documenta o que usa"',        correta: false },
+            { id:'l', texto: 'Serviço de notificação faz fetch de URLs recebidas nos eventos sem validação',        correta: false },
+        ],
+        explicacao: 'Corretas atacam API9 (inventory), API10 (unsafe API consumption) e a falta de auth interna (zero trust). As armadilhas representam o pensamento "perímetro = segurança" que é falho em microsserviços.',
+        metaAcertos: 4,
     },
 ];
 
 let estadoGuerra = {
-    fase: 'aguardando',   // aguardando | sala_aberta | votando | revelado | finalizado
-    rodadaAtual: 0,       // 0 = não iniciado, 1–10 = rodada ativa
-    votos: {},            // { aluno: 'A'|'B'|'C'|'D' } rodada atual
-    historico: [],        // [{ rodada, correta, votos:{...}, pontosGanhos }]
+    fase: 'aguardando',   // aguardando | sala_aberta | escolhendo | revelado | finalizado
+    rodadaAtual: 0,       // 0 = não iniciado, 1–5 = puzzle ativo
+    votos: {},            // { aluno: 'peça_id' } puzzle atual
+    historico: [],        // [{ rodada, corretosCount, votos:{...}, pontosGanhos }]
     pontosTime: 0,
     acertosPorAluno: {},  // { aluno: count }
     iniciadoEm: null,
 };
 
 function snapEstadoPublico(aluno) {
-    const q = QUESTOES_GUERRA[estadoGuerra.rodadaAtual - 1] || null;
-    const totalVotos = Object.keys(estadoGuerra.votos).length;
-    const meuVoto   = estadoGuerra.votos[aluno] || null;
+    const p = PUZZLES_GUERRA[estadoGuerra.rodadaAtual - 1] || null;
+    const totalEscolheram = Object.keys(estadoGuerra.votos).length;
+    const minhaPeca = estadoGuerra.votos[aluno] || null;
+    const revelado = estadoGuerra.fase === 'revelado' || estadoGuerra.fase === 'finalizado';
 
-    // Distribuição só revelada após resposta
-    let distribuicao = null;
-    if (estadoGuerra.fase === 'revelado' || estadoGuerra.fase === 'finalizado') {
-        distribuicao = { A:0, B:0, C:0, D:0 };
-        Object.values(estadoGuerra.votos).forEach(v => { if (distribuicao[v] !== undefined) distribuicao[v]++; });
+    // Peças ocupadas — visíveis durante escolhendo para forçar coordenação verbal
+    const pecasOcupadas = Object.values(estadoGuerra.votos);
+
+    // Após revelar: qual peça cada aluno escolheu + se foi correta
+    let escolhasReveladas = null;
+    if (revelado && p) {
+        escolhasReveladas = Object.fromEntries(
+            ALUNOS_APIS.map(a => {
+                const pecaId = estadoGuerra.votos[a.usuario] || null;
+                const peca   = pecaId ? p.pecas.find(pc => pc.id === pecaId) : null;
+                return [a.usuario, { pecaId, correta: peca ? peca.correta : null }];
+            })
+        );
     }
 
     return {
-        fase:        estadoGuerra.fase,
-        rodadaAtual: estadoGuerra.rodadaAtual,
-        totalRodadas: QUESTOES_GUERRA.length,
-        totalVotos,
-        totalAlunos:  ALUNOS_APIS.length,
-        meuVoto,
-        pontosTime:  estadoGuerra.pontosTime,
+        fase:            estadoGuerra.fase,
+        rodadaAtual:     estadoGuerra.rodadaAtual,
+        totalRodadas:    PUZZLES_GUERRA.length,
+        totalEscolheram,
+        totalAlunos:     ALUNOS_APIS.length,
+        minhaPeca,
+        pontosTime:      estadoGuerra.pontosTime,
         acertosPorAluno: estadoGuerra.acertosPorAluno,
-        historico:   estadoGuerra.historico,
-        questao: q ? {
-            id:      q.id,
-            cenario: q.cenario,
-            opcoes:  q.opcoes,
-            correta: estadoGuerra.fase === 'revelado' || estadoGuerra.fase === 'finalizado' ? q.correta : null,
-            explicacao: estadoGuerra.fase === 'revelado' || estadoGuerra.fase === 'finalizado' ? q.explicacao : null,
+        historico:       estadoGuerra.historico,
+        puzzle: p ? {
+            id:       p.id,
+            titulo:   p.titulo,
+            cenario:  p.cenario,
+            dica:     p.dica,
+            metaAcertos: p.metaAcertos,
+            // Sem campo .correta antes de revelar — alunos não veem a resposta
+            pecas: revelado ? p.pecas : p.pecas.map(pc => ({ id: pc.id, texto: pc.texto })),
+            explicacao: revelado ? p.explicacao : null,
         } : null,
-        distribuicao,
-        acertouRodada: estadoGuerra.fase === 'revelado' && q ? meuVoto === q.correta : null,
-        votosNomes: estadoGuerra.fase === 'revelado' || estadoGuerra.fase === 'finalizado'
-            ? Object.fromEntries(ALUNOS_APIS.map(a => [a.usuario, estadoGuerra.votos[a.usuario] || null]))
+        // Peças bloqueadas visíveis durante escolhendo (mas não quem escolheu — coordenação verbal)
+        pecasOcupadas: estadoGuerra.fase === 'escolhendo' ? pecasOcupadas : (revelado ? pecasOcupadas : []),
+        escolhasReveladas,
+        acertouRodada: revelado && minhaPeca && p
+            ? (p.pecas.find(pc => pc.id === minhaPeca)?.correta ?? null)
             : null,
     };
 }
@@ -5731,66 +5784,71 @@ app.get('/apis/guerra', exigirLoginApis, (req, res) => {
         .placar-item { text-align:center; }
         .placar-n  { font-size:28px; font-weight:800; color:#a78bfa; line-height:1; }
         .placar-l  { font-size:10px; color:#7c6fcd; text-transform:uppercase; letter-spacing:.07em; margin-top:3px; }
-        .main { max-width:680px; margin:0 auto; padding:28px 20px; }
+        .main { max-width:860px; margin:0 auto; padding:28px 20px; }
         .aguardando { text-align:center; padding:60px 20px; }
         .aguardando h2 { font-size:22px; color:#a78bfa; margin-bottom:10px; }
         .aguardando p  { color:#7c6fcd; font-size:14px; }
         .pulse { animation: pulse 2s infinite; }
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
-        .cenario-box { background:#1a1830; border:1px solid #2d2a5e; border-radius:14px; padding:22px 24px; margin-bottom:22px; }
-        .rodada-badge { font-size:11px; font-weight:700; color:#a78bfa; background:#2d2a5e; padding:3px 10px; border-radius:999px; display:inline-block; margin-bottom:12px; }
-        .cenario-txt { font-size:15px; line-height:1.7; color:#fffffe; }
-        .cenario-txt code { background:#2d2a5e; padding:2px 7px; border-radius:5px; font-size:13px; color:#a78bfa; }
-        .opcoes { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:20px; }
-        .opcao-btn { background:#1a1830; border:2px solid #2d2a5e; border-radius:12px; padding:16px 14px; cursor:pointer; text-align:left; font-size:13px; color:#fffffe; transition:all .15s; }
-        .opcao-btn:hover:not(:disabled) { border-color:#7C3AED; background:#2d2a5e; }
-        .opcao-btn.selecionado { border-color:#a78bfa; background:#2d2a5e; }
-        .opcao-btn:disabled { cursor:default; }
-        .opcao-btn .letra { font-weight:800; color:#a78bfa; margin-right:6px; }
-        .opcao-btn.correta  { border-color:#22c55e; background:#052e16; }
-        .opcao-btn.errada   { border-color:#ef4444; background:#2d0707; }
-        .opcao-btn.correta .letra { color:#22c55e; }
-        .opcao-btn.errada .letra  { color:#ef4444; }
-        .votos-barra { background:#1a1830; border:1px solid #2d2a5e; border-radius:12px; padding:16px 20px; margin-bottom:20px; }
-        .votos-barra h4 { font-size:12px; color:#7c6fcd; margin-bottom:12px; text-transform:uppercase; letter-spacing:.06em; }
-        .barra-row { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
-        .barra-letra { font-size:12px; font-weight:700; color:#a78bfa; width:16px; }
-        .barra-track { flex:1; height:8px; background:#2d2a5e; border-radius:999px; overflow:hidden; }
-        .barra-fill  { height:100%; background:#7C3AED; border-radius:999px; transition:width .4s; }
-        .barra-count { font-size:12px; color:#7c6fcd; width:20px; text-align:right; }
-        .resultado-box { background:#0d2a18; border:2px solid #22c55e; border-radius:14px; padding:20px 24px; margin-bottom:20px; }
+        .cenario-box { background:#1a1830; border:1px solid #2d2a5e; border-radius:14px; padding:22px 24px; margin-bottom:16px; }
+        .puzzle-titulo { font-size:12px; font-weight:700; color:#a78bfa; background:#2d2a5e; padding:3px 10px; border-radius:999px; display:inline-block; margin-bottom:10px; }
+        .puzzle-rod { font-size:11px; color:#7c6fcd; margin-left:8px; }
+        .cenario-txt { font-size:14px; line-height:1.7; color:#fffffe; margin-bottom:12px; }
+        .cenario-txt code { background:#2d2a5e; padding:2px 7px; border-radius:5px; font-size:12px; color:#a78bfa; }
+        .dica-box { background:#130f2a; border-left:3px solid #7C3AED; border-radius:0 8px 8px 0; padding:10px 14px; font-size:12px; color:#a78bfa; line-height:1.5; }
+        .status-bar { background:#1a1830; border:1px solid #2d2a5e; border-radius:10px; padding:11px 16px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center; }
+        .status-txt { font-size:12px; color:#7c6fcd; }
+        .prog-pecas { font-size:13px; font-weight:700; color:#a78bfa; }
+        .pecas-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:20px; }
+        @media(max-width:620px){ .pecas-grid { grid-template-columns:1fr 1fr; } }
+        .peca-btn {
+            background:#1a1830; border:2px solid #2d2a5e; border-radius:12px; padding:14px 12px;
+            cursor:pointer; text-align:left; color:#fffffe; transition:all .15s;
+            display:flex; flex-direction:column; gap:5px; min-height:90px;
+        }
+        .peca-btn:hover:not(:disabled):not(.tomada) { border-color:#7C3AED; background:#2d2a5e; }
+        .peca-btn.minha    { border-color:#a78bfa; background:#2d2a5e; }
+        .peca-btn.tomada   { opacity:.38; cursor:default; }
+        .peca-btn:disabled { cursor:default; }
+        .peca-id  { font-size:10px; font-weight:800; color:#7c6fcd; }
+        .peca-txt { font-size:12px; line-height:1.5; flex:1; }
+        .peca-meta { font-size:10px; margin-top:2px; }
+        .peca-btn.ok  { border-color:#22c55e; background:#052e16; cursor:default; }
+        .peca-btn.err { border-color:#ef4444; background:#2d0707; cursor:default; }
+        .peca-btn.minha-ok  { border-color:#22c55e; background:#052e16; box-shadow:0 0 0 3px rgba(34,197,94,.25); cursor:default; }
+        .peca-btn.minha-err { border-color:#ef4444; background:#2d0707; box-shadow:0 0 0 3px rgba(239,68,68,.25); cursor:default; }
+        .peca-id.ok  { color:#22c55e; }
+        .peca-id.err { color:#ef4444; }
+        .chip-aluno { font-size:10px; font-weight:700; padding:2px 7px; border-radius:999px; display:inline-block; }
+        .chip-aluno.ok  { background:#052e16; color:#22c55e; border:1px solid #22c55e; }
+        .chip-aluno.err { background:#2d0707; color:#ef4444; border:1px solid #ef4444; }
+        .resultado-box { background:#0d2a18; border:2px solid #22c55e; border-radius:14px; padding:18px 22px; margin-bottom:18px; }
         .resultado-box.errou { background:#2d0707; border-color:#ef4444; }
-        .resultado-titulo { font-size:22px; font-weight:800; margin-bottom:8px; }
-        .resultado-exp  { font-size:13px; line-height:1.6; color:#fffffe; opacity:.85; }
-        .votos-nomes { margin-top:14px; display:flex; flex-wrap:wrap; gap:6px; }
-        .voto-chip   { font-size:11px; padding:3px 10px; border-radius:999px; font-weight:600; }
-        .voto-certo  { background:#052e16; color:#22c55e; border:1px solid #22c55e; }
-        .voto-errado { background:#2d0707; color:#ef4444; border:1px solid #ef4444; }
-        .voto-sem    { background:#1a1830; color:#7c6fcd; border:1px solid #2d2a5e; }
-        .votando-status { text-align:center; font-size:13px; color:#7c6fcd; margin-bottom:14px; }
+        .resultado-titulo { font-size:20px; font-weight:800; margin-bottom:8px; }
+        .resultado-exp { font-size:13px; line-height:1.6; opacity:.9; }
         .final-box  { text-align:center; padding:40px 20px; }
         .final-titulo { font-size:26px; font-weight:800; color:#a78bfa; margin-bottom:8px; }
         .final-sub    { font-size:14px; color:#7c6fcd; margin-bottom:28px; }
         .ranking { list-style:none; max-width:400px; margin:0 auto; }
         .ranking li { display:flex; justify-content:space-between; align-items:center; background:#1a1830; border:1px solid #2d2a5e; border-radius:10px; padding:12px 18px; margin-bottom:8px; }
         .rank-pos  { font-size:18px; width:30px; }
-        .rank-nome { font-size:14px; font-weight:600; color:#fffffe; flex:1; padding:0 10px; }
+        .rank-nome { font-size:14px; font-weight:600; flex:1; padding:0 10px; }
         .rank-pts  { font-size:14px; font-weight:800; color:#a78bfa; }
     </style>
 </head><body>
     <div class="topo">
-        <div class="topo-brand">⚔️ Sala de Guerra</div>
+        <div class="topo-brand">🧩 Sala de Guerra</div>
         <div class="topo-info">👤 ${escapeHtml(nome)} &nbsp;|&nbsp; <span id="poll-status" style="font-size:10px;color:#4a4170;">🟡 conectando...</span> &nbsp;|&nbsp; <a href="/apis/lab" style="color:#7c6fcd;font-size:11px;">← Lab</a></div>
     </div>
     <div class="placar">
         <div class="placar-item"><div class="placar-n" id="pts-time">0</div><div class="placar-l">Pontos do Time</div></div>
-        <div class="placar-item"><div class="placar-n" id="rodada-atual">—</div><div class="placar-l">Rodada</div></div>
-        <div class="placar-item"><div class="placar-n" id="votos-count">0</div><div class="placar-l">Votaram</div></div>
+        <div class="placar-item"><div class="placar-n" id="puzzle-num">—</div><div class="placar-l">Puzzle</div></div>
+        <div class="placar-item"><div class="placar-n" id="escolheram-count">0</div><div class="placar-l">Escolheram</div></div>
     </div>
     <div class="main" id="main-conteudo">
         <div class="aguardando">
             <h2 class="pulse">⏳ Aguardando o professor iniciar o jogo...</h2>
-            <p>Quando a primeira rodada começar, a pergunta aparecerá aqui.</p>
+            <p>Quando o primeiro puzzle começar, as peças aparecerão aqui.</p>
         </div>
     </div>
     <script>
@@ -5802,8 +5860,8 @@ app.get('/apis/guerra', exigirLoginApis, (req, res) => {
         document.getElementById('main-conteudo').innerHTML = salaAberta ? \`
             <div class="aguardando">
                 <h2 class="pulse">✅ Você está na Sala de Guerra!</h2>
-                <p>Aguardando o professor iniciar a primeira rodada...</p>
-                <p style="margin-top:12px;font-size:12px;color:#4a4170;">Os outros colegas também precisam entrar antes de começar.</p>
+                <p>Aguardando o professor iniciar o primeiro puzzle...</p>
+                <p style="margin-top:12px;font-size:12px;color:#4a4170;">Os colegas também precisam entrar antes de começar.</p>
             </div>\` : \`
             <div class="aguardando">
                 <h2 class="pulse">⏳ Aguardando o professor liberar a sala...</h2>
@@ -5811,74 +5869,65 @@ app.get('/apis/guerra', exigirLoginApis, (req, res) => {
             </div>\`;
     }
 
-    function renderVotando(estado) {
-        const q = estado.questao;
-        const jaVotei = !!estado.meuVoto;
-        const opts = ['A','B','C','D'];
-        const total = estado.totalAlunos;
+    function renderEscolhendo(estado) {
+        const p = estado.puzzle;
+        const ocupadas = new Set(estado.pecasOcupadas || []);
+        const minha = estado.minhaPeca;
         document.getElementById('main-conteudo').innerHTML = \`
             <div class="cenario-box">
-                <div class="rodada-badge">Rodada \${estado.rodadaAtual} de \${estado.totalRodadas}</div>
-                <div class="cenario-txt">\${q.cenario}</div>
+                <div><span class="puzzle-titulo">\${p.titulo}</span><span class="puzzle-rod">Puzzle \${estado.rodadaAtual}/\${estado.totalRodadas}</span></div>
+                <div class="cenario-txt">\${p.cenario}</div>
+                <div class="dica-box">💡 \${p.dica}</div>
             </div>
-            <div class="opcoes">
-                \${opts.map(l => \`<button class="opcao-btn \${estado.meuVoto===l?'selecionado':''}" id="btn-\${l}"
-                    onclick="votar('\${l}')" \${jaVotei?'disabled':''}>
-                    <span class="letra">\${l}</span>\${q.opcoes[l]}
-                </button>\`).join('')}
+            <div class="status-bar">
+                <span class="status-txt" id="status-escolha">\${minha ? '✅ Peça reservada! Pode trocar enquanto o professor não revelar.' : '⬆️ Escolha UMA peça — clique para reservar'}</span>
+                <span class="prog-pecas" id="prog-pecas">\${estado.totalEscolheram}/\${estado.totalAlunos} escolheram</span>
             </div>
-            <div class="votando-status" id="votando-status">
-                \${jaVotei ? '✅ Voto registrado! Aguardando os colegas...' : '⬆️ Clique em uma opção para votar'}
-            </div>
-            <div class="votos-barra">
-                <h4>Votos recebidos: \${estado.totalVotos}/\${total}</h4>
-                <div class="barra-row"><span class="barra-letra">✓</span>
-                    <div class="barra-track"><div class="barra-fill" style="width:\${(estado.totalVotos/total)*100}%"></div></div>
-                    <span class="barra-count">\${estado.totalVotos}</span>
-                </div>
+            <div class="pecas-grid" id="pecas-grid">
+                \${p.pecas.map(pc => {
+                    const ehMinha = minha === pc.id;
+                    const tomada  = !ehMinha && ocupadas.has(pc.id);
+                    return \`<button class="peca-btn \${ehMinha?'minha':''} \${tomada?'tomada':''}"
+                        id="peca-\${pc.id}" onclick="escolher('\${pc.id}')" \${tomada?'disabled':''}>
+                        <span class="peca-id">Peça \${pc.id.toUpperCase()}</span>
+                        <span class="peca-txt">\${pc.texto}</span>
+                        <span class="peca-meta" style="color:\${ehMinha?'#a78bfa':tomada?'#4a4170':'#2d2a5e'};">\${ehMinha?'✓ sua escolha':tomada?'🔒 tomada':''}</span>
+                    </button>\`;
+                }).join('')}
             </div>\`;
     }
 
     function renderRevelado(estado) {
-        const q = estado.questao;
+        const p = estado.puzzle;
+        const minha = estado.minhaPeca;
         const acertei = estado.acertouRodada;
-        const dist = estado.distribuicao || {};
-        const total = estado.totalAlunos;
-        const corretosCount = dist[q.correta] || 0;
-        const pontosGanhos = estado.historico.length > 0 ? estado.historico[estado.historico.length-1].pontosGanhos : 0;
+        const ult = estado.historico.length > 0 ? estado.historico[estado.historico.length-1] : {};
+        const pontosGanhos = ult.pontosGanhos || 0;
+        const corretosCount = ult.corretosCount || 0;
         document.getElementById('main-conteudo').innerHTML = \`
             <div class="resultado-box \${acertei===false?'errou':''}">
-                <div class="resultado-titulo">\${acertei ? '🎯 Você acertou!' : acertei===false ? '❌ Você errou.' : '👁️ Resultado'}</div>
-                <div class="resultado-exp">\${q.explicacao}</div>
-                <div class="votos-nomes" id="votos-nomes-box"></div>
+                <div class="resultado-titulo">\${acertei===true?'🎯 Você escolheu certo!':acertei===false?'❌ Sua peça era uma armadilha.':'👁️ Resultado'}</div>
+                <div class="resultado-exp">\${p.explicacao}</div>
             </div>
-            <div class="votos-barra">
-                <h4>Distribuição dos votos — \${corretosCount}/\${total} acertaram</h4>
-                \${['A','B','C','D'].map(l => \`
-                <div class="barra-row">
-                    <span class="barra-letra" style="color:\${l===q.correta?'#22c55e':'#a78bfa'}">\${l}</span>
-                    <div class="barra-track"><div class="barra-fill" style="width:\${total>0?((dist[l]||0)/total)*100:0}%;background:\${l===q.correta?'#22c55e':'#7C3AED'}"></div></div>
-                    <span class="barra-count">\${dist[l]||0}</span>
-                </div>\`).join('')}
-            </div>
-            <p style="text-align:center;font-size:13px;color:\${pontosGanhos?'#22c55e':'#ef4444'};font-weight:700;">
-                \${pontosGanhos ? '🏆 +1 ponto para o time!' : '💀 Time não atingiu maioria — sem ponto nesta rodada.'}
+            <p style="text-align:center;font-size:13px;color:\${pontosGanhos?'#22c55e':'#ef4444'};font-weight:700;margin-bottom:16px;">
+                \${pontosGanhos?\`🏆 +1 ponto para o time! (\${corretosCount} peças corretas escolhidas)\`:\`💀 Poucos acertos — sem ponto. Corretas escolhidas: \${corretosCount}/\${p.metaAcertos} necessárias\`}
             </p>
-            <p style="text-align:center;font-size:12px;color:#7c6fcd;margin-top:8px;">Aguardando o professor avançar...</p>\`;
-
-        // Preenche chips de votantes
-        if (estado.votosNomes) {
-            const box = document.getElementById('votos-nomes-box');
-            if (box) {
-                Object.entries(estado.votosNomes).forEach(([u, v]) => {
-                    const certo = v === q.correta;
-                    const chip = document.createElement('span');
-                    chip.className = 'voto-chip ' + (v===null?'voto-sem':certo?'voto-certo':'voto-errado');
-                    chip.textContent = (NOMES_ALUNOS[u]||u) + (v ? ' ('+v+')' : ' —');
-                    box.appendChild(chip);
-                });
-            }
-        }
+            <div class="pecas-grid">
+                \${p.pecas.map(pc => {
+                    const ehMinha = minha === pc.id;
+                    const cls = ehMinha?(pc.correta?'minha-ok':'minha-err'):(pc.correta?'ok':'err');
+                    const idCls = pc.correta?'ok':'err';
+                    const quem = estado.escolhasReveladas
+                        ? Object.entries(estado.escolhasReveladas).filter(([u,d])=>d.pecaId===pc.id).map(([u])=>NOMES_ALUNOS[u]||u)
+                        : [];
+                    return \`<div class="peca-btn \${cls}">
+                        <span class="peca-id \${idCls}">Peça \${pc.id.toUpperCase()} \${pc.correta?'✓':'✗'}</span>
+                        <span class="peca-txt">\${pc.texto}</span>
+                        <span class="peca-meta">\${quem.map(n=>\`<span class="chip-aluno \${pc.correta?'ok':'err'}">\${n}</span>\`).join('')}</span>
+                    </div>\`;
+                }).join('')}
+            </div>
+            <p style="text-align:center;font-size:12px;color:#7c6fcd;margin-top:4px;">Aguardando o professor avançar...</p>\`;
     }
 
     function renderFinal(estado) {
@@ -5886,47 +5935,55 @@ app.get('/apis/guerra', exigirLoginApis, (req, res) => {
         const ranking = alunos.map(a => ({ nome: a.n, pts: estado.acertosPorAluno[a.u] || 0 }))
             .sort((a,b) => b.pts - a.pts);
         const medalhas = ['🥇','🥈','🥉'];
-        const ganhou = estado.pontosTime >= 7;
+        const ganhou = estado.pontosTime >= 4;
         document.getElementById('main-conteudo').innerHTML = \`
             <div class="final-box">
-                <div class="final-titulo">\${ganhou ? '🏆 Time Vencedor!' : '💀 Próxima vez!'}</div>
-                <div class="final-sub">\${estado.pontosTime}/\${estado.totalRodadas} pontos coletivos</div>
+                <div class="final-titulo">\${ganhou?'🏆 Time Vencedor!':'💀 Próxima vez!'}</div>
+                <div class="final-sub">\${estado.pontosTime}/\${estado.totalRodadas} puzzles resolvidos com sucesso</div>
                 <ul class="ranking">
-                    \${ranking.map((r, i) => \`<li>
+                    \${ranking.map((r,i) => \`<li>
                         <span class="rank-pos">\${medalhas[i]||'  '}</span>
                         <span class="rank-nome">\${r.nome}</span>
-                        <span class="rank-pts">\${r.pts}/\${estado.totalRodadas}</span>
+                        <span class="rank-pts">\${r.pts} acertos</span>
                     </li>\`).join('')}
                 </ul>
             </div>\`;
     }
 
     function render(estado) {
-        document.getElementById('pts-time').textContent = estado.pontosTime;
-        document.getElementById('rodada-atual').textContent = estado.rodadaAtual > 0 ? estado.rodadaAtual + '/' + estado.totalRodadas : '—';
-        document.getElementById('votos-count').textContent = estado.totalVotos + '/' + estado.totalAlunos;
+        document.getElementById('pts-time').textContent     = estado.pontosTime;
+        document.getElementById('puzzle-num').textContent   = estado.rodadaAtual > 0 ? estado.rodadaAtual + '/' + estado.totalRodadas : '—';
+        document.getElementById('escolheram-count').textContent = estado.totalEscolheram + '/' + estado.totalAlunos;
 
         const faseAnt = estadoAnterior ? estadoAnterior.fase : null;
         const rodAnt  = estadoAnterior ? estadoAnterior.rodadaAtual : null;
 
-        if (estado.fase === 'aguardando') { renderAguardando(false); }
+        if (estado.fase === 'aguardando')   { renderAguardando(false); }
         else if (estado.fase === 'sala_aberta') { if (faseAnt !== 'sala_aberta') renderAguardando(true); }
-        else if (estado.fase === 'votando') {
-            if (faseAnt !== 'votando' || rodAnt !== estado.rodadaAtual) { renderVotando(estado); }
-            else {
-                // Atualiza apenas contador de votos
-                const h4 = document.querySelector('.votos-barra h4');
-                if (h4) h4.textContent = 'Votos recebidos: ' + estado.totalVotos + '/' + estado.totalAlunos;
-                const fill = document.querySelector('.barra-fill');
-                if (fill) fill.style.width = (estado.totalVotos / estado.totalAlunos * 100) + '%';
-                const cnt = document.querySelector('.barra-count');
-                if (cnt) cnt.textContent = estado.totalVotos;
-                if (estado.meuVoto && !estadoAnterior?.meuVoto) {
-                    document.querySelectorAll('.opcao-btn').forEach(b => b.disabled = true);
-                    const btn = document.getElementById('btn-' + estado.meuVoto);
-                    if (btn) btn.classList.add('selecionado');
-                    const st = document.getElementById('votando-status');
-                    if (st) st.textContent = '✅ Voto registrado! Aguardando os colegas...';
+        else if (estado.fase === 'escolhendo') {
+            if (faseAnt !== 'escolhendo' || rodAnt !== estado.rodadaAtual) {
+                renderEscolhendo(estado);
+            } else {
+                // Atualiza peças bloqueadas e contador sem re-renderizar tudo
+                const ocupadas = new Set(estado.pecasOcupadas || []);
+                const minha = estado.minhaPeca;
+                if (estado.puzzle && estado.puzzle.pecas) {
+                    estado.puzzle.pecas.forEach(pc => {
+                        const btn = document.getElementById('peca-' + pc.id);
+                        if (!btn) return;
+                        const ehMinha = minha === pc.id;
+                        const tomada  = !ehMinha && ocupadas.has(pc.id);
+                        btn.disabled = tomada;
+                        btn.className = 'peca-btn' + (ehMinha?' minha':tomada?' tomada':'');
+                        const meta = btn.querySelector('.peca-meta');
+                        if (meta) meta.textContent = ehMinha ? '✓ sua escolha' : tomada ? '🔒 tomada' : '';
+                    });
+                }
+                const prog = document.getElementById('prog-pecas');
+                if (prog) prog.textContent = estado.totalEscolheram + '/' + estado.totalAlunos + ' escolheram';
+                const st = document.getElementById('status-escolha');
+                if (st && minha && !estadoAnterior?.minhaPeca) {
+                    st.textContent = '✅ Peça reservada! Pode trocar enquanto o professor não revelar.';
                 }
             }
         }
@@ -5938,16 +5995,13 @@ app.get('/apis/guerra', exigirLoginApis, (req, res) => {
         estadoAnterior = estado;
     }
 
-    async function votar(opcao) {
+    async function escolher(pecaId) {
         try {
-            const r = await fetch('/apis/guerra/votar', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ opcao }) });
+            const r = await fetch('/apis/guerra/votar', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ opcao: pecaId }) });
             const res = await r.json();
-            if (res.ok) {
-                document.querySelectorAll('.opcao-btn').forEach(b => b.disabled = true);
-                const btn = document.getElementById('btn-' + opcao);
-                if (btn) btn.classList.add('selecionado');
-                const st = document.getElementById('votando-status');
-                if (st) st.textContent = '✅ Voto registrado! Aguardando os colegas...';
+            if (!res.ok) {
+                const st = document.getElementById('status-escolha');
+                if (st) st.textContent = '⚠️ Essa peça já foi tomada! Escolha outra.';
             }
         } catch(e) { console.error(e); }
     }
@@ -5979,8 +6033,13 @@ app.get('/apis/guerra/estado', exigirLoginApis, (req, res) => {
 app.post('/apis/guerra/votar', exigirLoginApis, (req, res) => {
     const aluno = req.session.apisAluno;
     const { opcao } = req.body;
-    if (estadoGuerra.fase !== 'votando') return res.json({ ok: false, erro: 'Fora do período de votação' });
-    if (!['A','B','C','D'].includes(opcao)) return res.json({ ok: false, erro: 'Opção inválida' });
+    if (estadoGuerra.fase !== 'escolhendo') return res.json({ ok: false, erro: 'Fora do período de escolha' });
+    const p = PUZZLES_GUERRA[estadoGuerra.rodadaAtual - 1];
+    if (!p) return res.json({ ok: false, erro: 'Puzzle inválido' });
+    if (!p.pecas.find(pc => pc.id === opcao)) return res.json({ ok: false, erro: 'Peça inválida' });
+    // Rejeita se a peça já foi tomada por outro aluno
+    const ocupadaPor = Object.entries(estadoGuerra.votos).find(([a, id]) => id === opcao && a !== aluno);
+    if (ocupadaPor) return res.json({ ok: false, erro: 'Peça já tomada' });
     estadoGuerra.votos[aluno] = opcao;
     res.json({ ok: true });
 });
@@ -5996,43 +6055,49 @@ app.get('/apis/guerra/painel', (req, res) => {
         .controles { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:24px; }
         .btn { padding:12px 22px; border:none; border-radius:10px; font-size:14px; font-weight:700; cursor:pointer; transition:opacity .15s; }
         .btn:hover { opacity:.85; }
-        .btn-liberar  { background:#0891B2; color:white; }
-        .btn-iniciar  { background:#7C3AED; color:white; }
-        .btn-revelar  { background:#f59e0b; color:white; }
-        .btn-proximo  { background:#22c55e; color:#052e16; }
-        .btn-reset    { background:#ef4444; color:white; }
+        .btn-liberar { background:#0891B2; color:white; }
+        .btn-iniciar { background:#7C3AED; color:white; }
+        .btn-revelar { background:#f59e0b; color:white; }
+        .btn-proximo { background:#22c55e; color:#052e16; }
+        .btn-reset   { background:#ef4444; color:white; }
         .btn:disabled { opacity:.35; cursor:default; }
-        .painel-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+        .painel-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:20px; }
         .card { background:#1a1830; border:1px solid #2d2a5e; border-radius:14px; padding:20px; }
         .card h3 { font-size:14px; color:#a78bfa; margin-bottom:14px; }
-        .questao-box { background:#130f2a; border-radius:10px; padding:14px; font-size:13px; line-height:1.7; margin-bottom:14px; }
-        .questao-box code { background:#2d2a5e; padding:2px 6px; border-radius:4px; color:#a78bfa; }
-        .dist-row { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
-        .dist-letra { font-weight:800; color:#a78bfa; width:20px; }
-        .dist-track { flex:1; height:10px; background:#2d2a5e; border-radius:999px; overflow:hidden; }
-        .dist-fill  { height:100%; background:#7C3AED; border-radius:999px; transition:width .4s; }
-        .dist-count { font-size:12px; color:#7c6fcd; width:24px; text-align:right; }
-        .alunos-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
-        .aluno-chip { background:#130f2a; border:1px solid #2d2a5e; border-radius:8px; padding:8px 10px; font-size:12px; text-align:center; }
-        .aluno-chip.votou { border-color:#a78bfa; }
-        .aluno-chip .chip-voto { font-weight:800; color:#a78bfa; font-size:14px; }
-        .placar-row { display:flex; justify-content:space-around; background:#130f2a; border-radius:10px; padding:14px; margin-bottom:16px; }
+        .placar-row { display:flex; justify-content:space-around; background:#130f2a; border-radius:10px; padding:14px; margin-bottom:14px; }
         .placar-item { text-align:center; }
-        .placar-n  { font-size:26px; font-weight:800; color:#a78bfa; line-height:1; }
-        .placar-l  { font-size:10px; color:#7c6fcd; text-transform:uppercase; margin-top:3px; }
-        .historico-item { font-size:12px; color:#7c6fcd; padding:6px 0; border-bottom:1px solid #2d2a5e; display:flex; justify-content:space-between; }
-        #status-poll { font-size:11px; color:#7c6fcd; margin-top:10px; }
+        .placar-n { font-size:26px; font-weight:800; color:#a78bfa; line-height:1; }
+        .placar-l { font-size:10px; color:#7c6fcd; text-transform:uppercase; margin-top:3px; }
+        .puzzle-info { background:#130f2a; border-radius:10px; padding:12px 14px; font-size:13px; line-height:1.6; margin-bottom:12px; color:#fffffe; }
+        .puzzle-info code { background:#2d2a5e; padding:2px 5px; border-radius:3px; color:#a78bfa; }
+        .alunos-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+        .aluno-chip { background:#130f2a; border:1px solid #2d2a5e; border-radius:8px; padding:8px 10px; font-size:12px; text-align:center; transition:border-color .2s; }
+        .aluno-chip.escolheu { border-color:#a78bfa; }
+        .chip-status { font-weight:800; color:#a78bfa; font-size:16px; margin-top:3px; }
+        .pecas-lista { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; }
+        .peca-item { border-radius:8px; padding:10px 12px; font-size:12px; line-height:1.5; }
+        .peca-item.ok  { background:#052e16; border:1px solid #22c55e; }
+        .peca-item.err { background:#2d0707; border:1px solid #ef4444; }
+        .peca-sigla { font-size:11px; font-weight:800; display:block; margin-bottom:4px; }
+        .peca-sigla.ok  { color:#22c55e; }
+        .peca-sigla.err { color:#ef4444; }
+        .peca-desc { color:#fffffe; opacity:.85; display:block; margin-bottom:6px; }
+        .peca-aluno { font-size:10px; font-weight:700; padding:1px 7px; border-radius:999px; margin-right:4px; display:inline-block; }
+        .peca-aluno.ok  { background:#052e16; color:#22c55e; border:1px solid #22c55e; }
+        .peca-aluno.err { background:#2d0707; color:#ef4444; border:1px solid #ef4444; }
+        .historico-item { font-size:12px; color:#7c6fcd; padding:7px 0; border-bottom:1px solid #2d2a5e; display:flex; justify-content:space-between; }
+        #status-poll { font-size:11px; color:#7c6fcd; margin-top:12px; }
     </style>
 </head><body>
-    <h1>⚔️ Sala de Guerra — Painel do Professor</h1>
-    <div class="sub">Segurança em APIs · Aula 18 · Polling a cada 2s</div>
+    <h1>🧩 Sala de Guerra — Painel do Professor</h1>
+    <div class="sub">Quebra-Cabeça de Segurança · Aula 18 · Polling a cada 2s</div>
 
     <div class="controles">
-        <button class="btn btn-liberar"  id="btn-lib"  onclick="controle('liberar')">🔓 Liberar Sala</button>
-        <button class="btn btn-iniciar"  id="btn-ini"  onclick="controle('iniciar')" disabled>▶ Iniciar Rodada 1</button>
-        <button class="btn btn-revelar"  id="btn-rev"  onclick="controle('revelar')" disabled>👁 Revelar Resposta</button>
-        <button class="btn btn-proximo"  id="btn-prox" onclick="controle('proximo')" disabled>⏭ Próxima Rodada</button>
-        <button class="btn btn-reset"    id="btn-rst"  onclick="controle('reset')">🔄 Resetar Jogo</button>
+        <button class="btn btn-liberar" id="btn-lib"  onclick="controle('liberar')">🔓 Liberar Sala</button>
+        <button class="btn btn-iniciar" id="btn-ini"  onclick="controle('iniciar')" disabled>▶ Iniciar Puzzle 1</button>
+        <button class="btn btn-revelar" id="btn-rev"  onclick="controle('revelar')" disabled>👁 Revelar Peças</button>
+        <button class="btn btn-proximo" id="btn-prox" onclick="controle('proximo')" disabled>⏭ Próximo Puzzle</button>
+        <button class="btn btn-reset"   id="btn-rst"  onclick="controle('reset')">🔄 Resetar Jogo</button>
     </div>
 
     <div class="painel-grid">
@@ -6040,39 +6105,37 @@ app.get('/apis/guerra/painel', (req, res) => {
             <h3>📊 Estado Atual</h3>
             <div class="placar-row">
                 <div class="placar-item"><div class="placar-n" id="p-pts">0</div><div class="placar-l">Pontos Time</div></div>
-                <div class="placar-item"><div class="placar-n" id="p-rod">—</div><div class="placar-l">Rodada</div></div>
+                <div class="placar-item"><div class="placar-n" id="p-rod">—</div><div class="placar-l">Puzzle</div></div>
                 <div class="placar-item"><div class="placar-n" id="p-fase">—</div><div class="placar-l">Fase</div></div>
             </div>
-            <div class="questao-box" id="questao-texto">Nenhuma questão ativa.</div>
-            <div id="dist-votos">
-                ${['A','B','C','D'].map(l => `<div class="dist-row">
-                    <span class="dist-letra">${l}</span>
-                    <div class="dist-track"><div class="dist-fill" id="df-${l}" style="width:0%"></div></div>
-                    <span class="dist-count" id="dc-${l}">0</span>
-                </div>`).join('')}
-            </div>
+            <div class="puzzle-info" id="puzzle-info">Nenhum puzzle ativo.</div>
         </div>
         <div class="card">
-            <h3>👥 Votos dos Alunos</h3>
+            <h3>👥 Alunos</h3>
             <div class="alunos-grid" id="alunos-grid">
                 ${ALUNOS_APIS.map(a => `<div class="aluno-chip" id="chip-${a.usuario}">
                     <div style="font-size:11px;color:#7c6fcd;">${a.nomeExibicao}</div>
-                    <div class="chip-voto" id="voto-${a.usuario}">—</div>
+                    <div class="chip-status" id="status-${a.usuario}">—</div>
                 </div>`).join('')}
             </div>
             <div id="status-poll">🟡 Aguardando...</div>
         </div>
     </div>
 
+    <div class="card">
+        <h3>🧩 Peças do Puzzle Atual</h3>
+        <div id="pecas-box"><p style="color:#7c6fcd;font-size:12px;">Será exibido após revelar.</p></div>
+    </div>
+
     <div class="card" style="margin-top:20px;">
-        <h3>📜 Histórico de Rodadas</h3>
-        <div id="historico-lista"><p style="color:#7c6fcd;font-size:12px;">Nenhuma rodada concluída ainda.</p></div>
+        <h3>📜 Histórico de Puzzles</h3>
+        <div id="historico-lista"><p style="color:#7c6fcd;font-size:12px;">Nenhum puzzle concluído ainda.</p></div>
     </div>
 
     <script>
     const TOTAL_ALUNOS = ${ALUNOS_APIS.length};
     const NOMES = ${JSON.stringify(Object.fromEntries(ALUNOS_APIS.map(a=>[a.usuario,a.nomeExibicao])))};
-    const QUESTOES = ${JSON.stringify(QUESTOES_GUERRA.map(q=>({id:q.id,cenario:q.cenario,opcoes:q.opcoes,correta:q.correta,explicacao:q.explicacao})))};
+    const PUZZLES = ${JSON.stringify(PUZZLES_GUERRA.map(p=>({id:p.id,titulo:p.titulo,cenario:p.cenario,metaAcertos:p.metaAcertos,pecas:p.pecas})))};
 
     async function controle(acao) {
         await fetch('/apis/guerra/controle', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ acao }) });
@@ -6082,7 +6145,7 @@ app.get('/apis/guerra/painel', (req, res) => {
     function atualizarBotoes(fase) {
         document.getElementById('btn-lib').disabled  = fase !== 'aguardando' && fase !== 'finalizado';
         document.getElementById('btn-ini').disabled  = fase !== 'sala_aberta';
-        document.getElementById('btn-rev').disabled  = fase !== 'votando';
+        document.getElementById('btn-rev').disabled  = fase !== 'escolhendo';
         document.getElementById('btn-prox').disabled = fase !== 'revelado';
         document.getElementById('btn-rst').disabled  = false;
     }
@@ -6093,39 +6156,53 @@ app.get('/apis/guerra/painel', (req, res) => {
             const estado = await r.json();
 
             document.getElementById('p-pts').textContent  = estado.pontosTime;
-            document.getElementById('p-rod').textContent  = estado.rodadaAtual > 0 ? estado.rodadaAtual + '/' + QUESTOES.length : '—';
+            document.getElementById('p-rod').textContent  = estado.rodadaAtual > 0 ? estado.rodadaAtual + '/' + PUZZLES.length : '—';
             document.getElementById('p-fase').textContent = estado.fase;
             atualizarBotoes(estado.fase);
 
-            const q = estado.rodadaAtual > 0 ? QUESTOES[estado.rodadaAtual - 1] : null;
-            document.getElementById('questao-texto').innerHTML = q ? q.cenario : 'Nenhuma questão ativa.';
+            const p = estado.rodadaAtual > 0 ? PUZZLES[estado.rodadaAtual - 1] : null;
+            const totalEscolheram = Object.keys(estado.votos).length;
+            document.getElementById('puzzle-info').innerHTML = p
+                ? \`<strong>\${p.titulo}</strong><br><span style="font-size:12px;color:#a78bfa;">\${totalEscolheram}/\${TOTAL_ALUNOS} escolheram</span><br><span style="font-size:12px;color:#7c6fcd;">\${p.cenario.replace(/<[^>]+>/g,'').substring(0,120)}...</span>\`
+                : 'Nenhum puzzle ativo.';
 
-            const dist = {A:0,B:0,C:0,D:0};
-            Object.values(estado.votos).forEach(v => { if (dist[v]!==undefined) dist[v]++; });
-            ['A','B','C','D'].forEach(l => {
-                const pct = TOTAL_ALUNOS > 0 ? (dist[l]/TOTAL_ALUNOS)*100 : 0;
-                const fill = document.getElementById('df-'+l);
-                const cnt  = document.getElementById('dc-'+l);
-                if (fill) { fill.style.width = pct+'%'; fill.style.background = (q && l===q.correta) ? '#22c55e' : '#7C3AED'; }
-                if (cnt)  cnt.textContent = dist[l];
-            });
-
+            // Chips de alunos — mostra apenas se escolheu (não o quê)
             Object.entries(NOMES).forEach(([u, nome]) => {
-                const chip = document.getElementById('chip-'+u);
-                const voto = document.getElementById('voto-'+u);
-                const v = estado.votos[u] || null;
-                if (chip) chip.classList.toggle('votou', !!v);
-                if (voto) voto.textContent = v || '—';
+                const chip   = document.getElementById('chip-' + u);
+                const status = document.getElementById('status-' + u);
+                const escolheu = !!estado.votos[u];
+                if (chip)   chip.classList.toggle('escolheu', escolheu);
+                if (status) status.textContent = escolheu ? '✓' : '—';
             });
 
+            // Peças reveladas (após revelar)
+            const pecasBox = document.getElementById('pecas-box');
+            if (p && (estado.fase === 'revelado' || estado.fase === 'finalizado')) {
+                pecasBox.innerHTML = \`<div class="pecas-lista">\${p.pecas.map(pc => {
+                    const quem = Object.entries(NOMES)
+                        .filter(([u]) => estado.votos[u] === pc.id)
+                        .map(([u,n]) => n);
+                    const cls = pc.correta ? 'ok' : 'err';
+                    return \`<div class="peca-item \${cls}">
+                        <span class="peca-sigla \${cls}">Peça \${pc.id.toUpperCase()} \${pc.correta?'✓':'✗'}</span>
+                        <span class="peca-desc">\${pc.texto}</span>
+                        \${quem.map(n=>\`<span class="peca-aluno \${cls}">\${n}</span>\`).join('')}
+                    </div>\`;
+                }).join('')}</div>\`;
+            } else {
+                pecasBox.innerHTML = p
+                    ? \`<p style="color:#7c6fcd;font-size:12px;">Aguardando todos escolherem — peças reveladas após clicar "Revelar Peças".</p>\`
+                    : \`<p style="color:#7c6fcd;font-size:12px;">Nenhum puzzle ativo.</p>\`;
+            }
+
+            // Histórico
             const hist = document.getElementById('historico-lista');
             if (estado.historico.length > 0) {
                 hist.innerHTML = estado.historico.map(h => {
-                    const qh = QUESTOES[h.rodada-1];
-                    const corretos = Object.values(h.votos).filter(v=>v===h.correta).length;
+                    const ph = PUZZLES[h.rodada - 1];
                     return \`<div class="historico-item">
-                        <span>R\${h.rodada}: \${qh ? qh.opcoes[h.correta].substring(0,40)+'...' : ''}</span>
-                        <span style="color:\${h.pontosGanhos?'#22c55e':'#ef4444'};">\${corretos}/\${TOTAL_ALUNOS} corretos · \${h.pontosGanhos?'+1 ponto':'sem ponto'}</span>
+                        <span>P\${h.rodada}: \${ph ? ph.titulo : ''}</span>
+                        <span style="color:\${h.pontosGanhos?'#22c55e':'#ef4444'};">\${h.corretosCount}/\${ph?ph.metaAcertos:4} corretas · \${h.pontosGanhos?'+1 ponto':'sem ponto'}</span>
                     </div>\`;
                 }).reverse().join('');
             }
@@ -6168,7 +6245,7 @@ app.post('/apis/guerra/controle', (req, res) => {
 
     if (acao === 'iniciar') {
         if (estadoGuerra.fase === 'sala_aberta') {
-            estadoGuerra.fase = 'votando';
+            estadoGuerra.fase = 'escolhendo';
             estadoGuerra.rodadaAtual = 1;
             estadoGuerra.votos = {};
             estadoGuerra.iniciadoEm = Date.now();
@@ -6177,30 +6254,35 @@ app.post('/apis/guerra/controle', (req, res) => {
     }
 
     if (acao === 'revelar') {
-        if (estadoGuerra.fase !== 'votando') return res.json({ ok: false });
-        const q = QUESTOES_GUERRA[estadoGuerra.rodadaAtual - 1];
-        const corretos = Object.values(estadoGuerra.votos).filter(v => v === q.correta).length;
-        const pontosGanhos = corretos >= Math.ceil(ALUNOS_APIS.length / 2) ? 1 : 0;
+        if (estadoGuerra.fase !== 'escolhendo') return res.json({ ok: false });
+        const p = PUZZLES_GUERRA[estadoGuerra.rodadaAtual - 1];
+        // Conta quantos alunos escolheram peças corretas
+        const corretosCount = Object.entries(estadoGuerra.votos).filter(([, pecaId]) => {
+            const peca = p.pecas.find(pc => pc.id === pecaId);
+            return peca && peca.correta;
+        }).length;
+        const pontosGanhos = corretosCount >= p.metaAcertos ? 1 : 0;
         estadoGuerra.pontosTime += pontosGanhos;
-        // Atualiza acertos por aluno
-        Object.entries(estadoGuerra.votos).forEach(([aluno, voto]) => {
-            if (voto === q.correta) {
+        // Acertos individuais: aluno que escolheu peça correta recebe +1
+        Object.entries(estadoGuerra.votos).forEach(([aluno, pecaId]) => {
+            const peca = p.pecas.find(pc => pc.id === pecaId);
+            if (peca && peca.correta) {
                 estadoGuerra.acertosPorAluno[aluno] = (estadoGuerra.acertosPorAluno[aluno] || 0) + 1;
             }
         });
-        estadoGuerra.historico.push({ rodada: estadoGuerra.rodadaAtual, correta: q.correta, votos: {...estadoGuerra.votos}, pontosGanhos });
+        estadoGuerra.historico.push({ rodada: estadoGuerra.rodadaAtual, corretosCount, votos: {...estadoGuerra.votos}, pontosGanhos });
         estadoGuerra.fase = 'revelado';
         return res.json({ ok: true });
     }
 
     if (acao === 'proximo') {
         if (estadoGuerra.fase !== 'revelado') return res.json({ ok: false });
-        if (estadoGuerra.rodadaAtual >= QUESTOES_GUERRA.length) {
+        if (estadoGuerra.rodadaAtual >= PUZZLES_GUERRA.length) {
             estadoGuerra.fase = 'finalizado';
         } else {
             estadoGuerra.rodadaAtual++;
             estadoGuerra.votos = {};
-            estadoGuerra.fase = 'votando';
+            estadoGuerra.fase = 'escolhendo';
         }
         return res.json({ ok: true });
     }
