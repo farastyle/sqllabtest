@@ -5780,7 +5780,7 @@ app.get('/apis/guerra', exigirLoginApis, (req, res) => {
 </head><body>
     <div class="topo">
         <div class="topo-brand">⚔️ Sala de Guerra</div>
-        <div class="topo-info">👤 ${escapeHtml(nome)} &nbsp;|&nbsp; <a href="/apis/lab" style="color:#7c6fcd;font-size:11px;">← Lab</a></div>
+        <div class="topo-info">👤 ${escapeHtml(nome)} &nbsp;|&nbsp; <span id="poll-status" style="font-size:10px;color:#4a4170;">🟡 conectando...</span> &nbsp;|&nbsp; <a href="/apis/lab" style="color:#7c6fcd;font-size:11px;">← Lab</a></div>
     </div>
     <div class="placar">
         <div class="placar-item"><div class="placar-n" id="pts-time">0</div><div class="placar-l">Pontos do Time</div></div>
@@ -5956,9 +5956,15 @@ app.get('/apis/guerra', exigirLoginApis, (req, res) => {
     async function poll() {
         try {
             const r = await fetch('/apis/guerra/estado');
+            if (!r.ok) { console.error('poll HTTP', r.status); return; }
             const estado = await r.json();
             render(estado);
-        } catch(e) { console.error(e); }
+            const el = document.getElementById('poll-status');
+            if (el) el.textContent = '🟢 ' + new Date().toLocaleTimeString('pt-BR');
+        } catch(e) { console.error('poll erro:', e);
+            const el = document.getElementById('poll-status');
+            if (el) el.textContent = '🔴 erro de conexão';
+        }
     }
 
     poll();
