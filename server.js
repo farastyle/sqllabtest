@@ -5795,6 +5795,7 @@ app.get('/apis/guerra', exigirLoginApis, (req, res) => {
     </div>
     <script>
     const MEU_ALUNO = '${req.session.apisAluno}';
+    const NOMES_ALUNOS = ${JSON.stringify(Object.fromEntries(ALUNOS_APIS.map(a=>[a.usuario, a.nomeExibicao])))};
     let estadoAnterior = null;
 
     function renderAguardando(salaAberta) {
@@ -5869,13 +5870,11 @@ app.get('/apis/guerra', exigirLoginApis, (req, res) => {
         if (estado.votosNomes) {
             const box = document.getElementById('votos-nomes-box');
             if (box) {
-                const nomeMap = {};
-                \${JSON.stringify(ALUNOS_APIS.map(a=>({u:a.usuario,n:a.nomeExibicao})))}.forEach(a=>nomeMap[a.u]=a.n);
                 Object.entries(estado.votosNomes).forEach(([u, v]) => {
                     const certo = v === q.correta;
                     const chip = document.createElement('span');
                     chip.className = 'voto-chip ' + (v===null?'voto-sem':certo?'voto-certo':'voto-errado');
-                    chip.textContent = (nomeMap[u]||u) + (v ? ' ('+v+')' : ' —');
+                    chip.textContent = (NOMES_ALUNOS[u]||u) + (v ? ' ('+v+')' : ' —');
                     box.appendChild(chip);
                 });
             }
