@@ -4556,6 +4556,1014 @@ app.post('/superficie/lab/reset', exigirLoginSuperficie, async (req, res) => {
     } catch (err) { res.status(500).json({ sucesso: false, erro: err.message }); }
 });
 
+// =====================================
+// LAB 7: SEGURANÇA EM APIs (AULA 18)
+// =====================================
+
+const CONCEITOS_APIS = [
+    { icone: '🔑', nome: 'Autenticação vs Autorização', cor: '#7C3AED',
+      descricao: 'Autenticação confirma quem você é. Autorização define o que você pode fazer. APIs falham quando confundem os dois.',
+      exemplo: 'Estar logado não significa poder acessar o pedido de outro usuário.' },
+    { icone: '🪪', nome: 'BOLA — Broken Object Level Auth', cor: '#6D28D9',
+      descricao: 'Ocorre quando a API não verifica se o recurso solicitado pertence ao usuário que fez a requisição.',
+      exemplo: 'GET /api/pedidos/1 funciona para o dono; GET /api/pedidos/2 também funciona — e não deveria.' },
+    { icone: '📦', nome: 'Exposição de Dados Sensíveis', cor: '#5B21B6',
+      descricao: 'APIs retornam mais campos do que o necessário — CPF, senha_hash, saldo — mesmo que o frontend não exiba.',
+      exemplo: 'Inspecionar a aba Network do browser e ver campos que a tela esconde.' },
+    { icone: '🚦', nome: 'Rate Limiting', cor: '#4C1D95',
+      descricao: 'Sem limite de requisições, um atacante pode tentar milhares de senhas ou fazer scraping de dados.',
+      exemplo: 'POST /api/login sem rate limit → ataque de força bruta possível.' },
+    { icone: '📋', nome: 'OWASP API Security Top 10', cor: '#7C3AED',
+      descricao: 'Lista das 10 categorias de risco mais comuns em APIs. Referência usada em relatórios e auditorias.',
+      exemplo: 'API1: BOLA · API2: Broken Auth · API5: Broken Function Level Auth.' },
+];
+
+// --- Dados: exercícios 3 e 5 (drag 2 colunas) ---
+const ITEMS_DRAG_API3 = [
+    { id: 'a', texto: 'POST /api/pedidos — criar um pedido',          correto: 'auth'   },
+    { id: 'b', texto: 'GET /api/produtos — listar catálogo',           correto: 'publico'},
+    { id: 'c', texto: 'DELETE /api/usuarios/1 — excluir conta',        correto: 'auth'   },
+    { id: 'd', texto: 'GET /api/relatorio-vendas — relatório geral',   correto: 'auth'   },
+    { id: 'e', texto: 'POST /api/login — autenticar usuário',          correto: 'publico'},
+    { id: 'f', texto: 'GET /api/config/sistema — configurações',       correto: 'auth'   },
+    { id: 'g', texto: 'GET /api/status — health check',                correto: 'publico'},
+    { id: 'h', texto: 'PATCH /api/usuarios/1 — editar perfil',        correto: 'auth'   },
+];
+
+const ITEMS_DRAG_API5 = [
+    { id: 'a', texto: 'API retorna senha_hash em toda resposta de usuário',                 correto: 'vuln'   },
+    { id: 'b', texto: 'Endpoint POST /api/login sem limite de tentativas',                  correto: 'vuln'   },
+    { id: 'c', texto: 'GET /api/produtos disponível sem autenticação',                       correto: 'ok'     },
+    { id: 'd', texto: 'Token JWT sem campo de expiração (exp)',                              correto: 'vuln'   },
+    { id: 'e', texto: 'DELETE /api/admin/users/5 acessível por qualquer usuário logado',    correto: 'vuln'   },
+    { id: 'f', texto: 'Swagger/OpenAPI disponível apenas em ambiente de homolog',           correto: 'ok'     },
+    { id: 'g', texto: 'API exposta na internet sem HTTPS',                                  correto: 'vuln'   },
+    { id: 'h', texto: 'API key gerada por usuário com prazo de validade de 30 dias',       correto: 'ok'     },
+];
+
+// --- Dados: exercício 4 (toggle) ---
+const TOGGLES_API4 = [
+    { id: 'a', texto: 'DELETE /api/pedidos/:id',          correto: true  },
+    { id: 'b', texto: 'GET /api/produtos (catálogo público)', correto: false },
+    { id: 'c', texto: 'PUT /api/usuarios/:id (atualizar)', correto: true  },
+    { id: 'd', texto: 'PATCH /api/pagamentos/:id',        correto: true  },
+    { id: 'e', texto: 'POST /api/pagamentos',             correto: true  },
+    { id: 'f', texto: 'GET /api/status (health check)',   correto: false },
+];
+
+// --- Dados: exercício 6 (hotspot — campos no JSON) ---
+const HOTSPOTS_API6 = [
+    { id: 'id',          correto: false },
+    { id: 'nome',        correto: false },
+    { id: 'email',       correto: false },
+    { id: 'cpf',         correto: true  },
+    { id: 'senha_hash',  correto: true  },
+    { id: 'saldo',       correto: true  },
+    { id: 'plano',       correto: false },
+    { id: 'criado_em',   correto: false },
+];
+
+// --- Dados: exercício 10 (ordem) ---
+const PASSOS_API10 = [
+    { id: 'a', texto: '📋 Levantar inventário dos endpoints disponíveis (Swagger, Postman collection)' },
+    { id: 'b', texto: '🔑 Autenticar com credencial de teste no ambiente de homolog' },
+    { id: 'c', texto: '🔄 Testar acesso a recursos de outro usuário — trocar IDs na URL' },
+    { id: 'd', texto: '👁️ Inspecionar respostas em busca de campos sensíveis desnecessários' },
+    { id: 'e', texto: '📄 Registrar as falhas encontradas no relatório de teste' },
+];
+const ORDEM_CORRETA_API10 = ['a', 'b', 'c', 'd', 'e'];
+
+// --- Dados: exercício 11 (mapa) ---
+const ITEMS_MAP_API11 = [
+    { id: 'gw',    emoji: '🌐', nome: 'API Gateway (público)',          zona: 'ext', correto: true  },
+    { id: 'auth',  emoji: '🔑', nome: 'Endpoint /api/login',            zona: 'ext', correto: true  },
+    { id: 'prod',  emoji: '🛍️', nome: 'Endpoint /api/produtos',         zona: 'ext', correto: true  },
+    { id: 'admin', emoji: '⚙️', nome: 'Endpoint /api/admin/config',     zona: 'ext', correto: false }, // deveria ser interno
+    { id: 'pay',   emoji: '💳', nome: 'Serviço de Pagamento (interno)', zona: 'int', correto: false },
+    { id: 'db',    emoji: '🗄️', nome: 'Banco de Dados',                 zona: 'int', correto: false },
+    { id: 'queue', emoji: '📨', nome: 'Fila de Mensagens (RabbitMQ)',   zona: 'int', correto: false },
+];
+
+// --- Dados: exercício 12 (toggle — user stories) ---
+const STORIES_API12 = [
+    { id: 'a', tag: 'US-21', texto: 'Como usuário, quero consultar meu histórico de pedidos via API.',        correto: true  },
+    { id: 'b', tag: 'US-22', texto: 'Como time, quero refatorar os testes unitários do serviço de preços.',  correto: false },
+    { id: 'c', tag: 'US-23', texto: 'Como admin, quero um endpoint para exportar relatório de vendas (CSV).', correto: true  },
+    { id: 'd', tag: 'US-24', texto: 'Como time, quero migrar o banco para uma instância maior.',              correto: false },
+    { id: 'e', tag: 'US-25', texto: 'Como sistema externo, quero integrar via webhook ao receber pagamentos.', correto: true  },
+    { id: 'f', tag: 'US-26', texto: 'Como dev, quero adicionar logs internos no serviço de autenticação.',   correto: false },
+];
+
+// --- Dados: exercício 13 (hotspot — Swagger mock) ---
+const HOTSPOTS_API13 = [
+    { id: 'login',       correto: false }, // login público, ok
+    { id: 'produtos',    correto: false }, // catálogo público, ok
+    { id: 'pedidos',     correto: true  }, // precisa auth, exposto sem cadeado
+    { id: 'admin',       correto: true  }, // admin sem auth
+    { id: 'relatorio',   correto: true  }, // relatório sem auth
+    { id: 'status',      correto: false }, // health check, ok
+];
+
+// --- Dados: exercício 14 (ordem — sprint) ---
+const PASSOS_API14 = [
+    { id: 'a', texto: '🗂️ Revisar as user stories da sprint e identificar as que criam novos endpoints' },
+    { id: 'b', texto: '📋 Mapear os novos endpoints e verificar se exigem autenticação' },
+    { id: 'c', texto: '🧪 Executar testes de autorização em homolog (troca de IDs, acesso sem token)' },
+    { id: 'd', texto: '🔍 Analisar respostas: verificar campos sensíveis retornados desnecessariamente' },
+    { id: 'e', texto: '📝 Registrar falhas com categoria OWASP e evidência no relatório' },
+];
+const ORDEM_CORRETA_API14 = ['a', 'b', 'c', 'd', 'e'];
+
+// --- Dados: exercício 15 (blanks) ---
+const BLANKS_API15 = [
+    { id: 'b1', opcoes: ['API1', 'API3', 'API5'],              correto: 'API1'             },
+    { id: 'b2', opcoes: ['senha_hash', 'nome', 'id'],          correto: 'senha_hash'       },
+    { id: 'b3', opcoes: ['DELETE', 'GET', 'OPTIONS'],           correto: 'DELETE'           },
+    { id: 'b4', opcoes: ['validar o token do usuário', 'logar o erro', 'retornar 200'], correto: 'validar o token do usuário' },
+];
+
+const CONTEUDO_APIS = [
+    { id: 'api1',  fase: 'observacao',    titulo: '🔍 A API que conta demais',
+      enunciado: 'Você está testando o sistema no ambiente de homolog e acessa:<br><code style="background:#f3f0ff;padding:2px 6px;border-radius:4px;">GET /api/pedidos/100</code><br>A resposta chega normalmente com seus dados. Qual número você tentaria a seguir para ver se acessa dados de outro usuário?',
+      placeholder: 'Digite o número' },
+    { id: 'api2',  fase: 'observacao',    titulo: '👁️ O que a resposta esconde?',
+      enunciado: 'A API retorna este JSON ao consultar um perfil:<br><code style="background:#f3f0ff;padding:2px 6px;border-radius:4px;font-size:12px;">{"id":1,"nome":"Maria","email":"maria@loja.com","cpf":"123.456.789-00","senha_hash":"$2b$10$abc...","saldo":950.00,"plano":"premium","criado_em":"2024-01-10"}</code><br>Quantos campos <strong>não</strong> deveriam aparecer nessa resposta pública?',
+      placeholder: 'Digite o número' },
+    { id: 'api3',  fase: 'diferenciacao', titulo: '🔐 Autenticado ou Público?',
+      enunciado: 'Cada endpoint abaixo precisa de autenticação ou pode ser acessado por qualquer pessoa? Arraste para a coluna correta.' },
+    { id: 'api4',  fase: 'diferenciacao', titulo: '🚦 Quem precisa de autenticação?',
+      enunciado: 'Ative o toggle nos endpoints que <strong>obrigatoriamente devem exigir autenticação</strong> antes de processar a requisição.' },
+    { id: 'api5',  fase: 'classificacao', titulo: '⚠️ Vulnerabilidade ou não?',
+      enunciado: 'Analise cada cenário e classifique: é uma vulnerabilidade de API ou um comportamento aceitável?' },
+    { id: 'api6',  fase: 'classificacao', titulo: '📦 Dados que não deveriam sair',
+      enunciado: 'A resposta abaixo foi capturada na aba Network do browser. Clique nos campos que <strong>não</strong> deveriam aparecer em uma resposta pública de perfil.' },
+    { id: 'api7',  fase: 'sintese',       titulo: '📋 O Top 10 das APIs',
+      enunciado: 'O OWASP mantém uma lista oficial com as categorias de risco mais comuns em APIs. Quantas categorias compõem essa lista?',
+      placeholder: 'Digite o número' },
+    { id: 'api8',  fase: 'sintese',       titulo: '🪪 Nomeando o ataque',
+      enunciado: 'Durante o teste, você muda a URL de <code style="background:#f3f0ff;padding:2px 6px;border-radius:4px;">GET /api/pedidos/100</code> para <code style="background:#f3f0ff;padding:2px 6px;border-radius:4px;">GET /api/pedidos/101</code> e recebe os dados de outro usuário. Em qual categoria do OWASP API Top 10 esse ataque se enquadra? <em>(responda: API seguido do número)</em>',
+      placeholder: 'ex: API1' },
+    { id: 'api9',  fase: 'sintese',       titulo: '🔓 Quem pode deletar?',
+      enunciado: 'O endpoint <code style="background:#f3f0ff;padding:2px 6px;border-radius:4px;">DELETE /api/admin/users/5</code> aceita requisições de qualquer usuário autenticado — não só administradores. Em qual categoria do OWASP API Top 10 isso se enquadra? <em>(responda: API seguido do número)</em>',
+      placeholder: 'ex: API5' },
+    { id: 'api10', fase: 'sintese',       titulo: '🗂️ Ordem do teste',
+      enunciado: 'No ambiente de homolog, você vai testar a segurança de uma API pela primeira vez. Reorganize os passos abaixo na ordem correta.' },
+    { id: 'api11', fase: 'ambiente',      titulo: '🗺️ Mapa da Arquitetura',
+      enunciado: 'Esta é a arquitetura do sistema do cliente. Selecione os componentes que estão <strong>expostos externamente</strong> e, portanto, compõem a superfície de ataque da API.' },
+    { id: 'api12', fase: 'ambiente',      titulo: '📋 Sprint: quais stories abrem API?',
+      enunciado: 'O time acabou de planejar a sprint. Ative o toggle nas user stories que <strong>criam ou expandem a superfície de ataque da API</strong> — ou seja, introduzem novos endpoints ou integrações externas.' },
+    { id: 'api13', fase: 'ambiente',      titulo: '🔍 Swagger sem cadeado',
+      enunciado: 'Esta é a documentação Swagger do sistema em homolog. Clique nos endpoints que estão <strong>expostos sem autenticação</strong> — onde falta o ícone de cadeado.' },
+    { id: 'api14', fase: 'ambiente',      titulo: '🏃 Segurança na Sprint',
+      enunciado: 'Como você encaixaria a revisão de segurança de API dentro de uma sprint? Reorganize as etapas na ordem ideal.' },
+    { id: 'api15', fase: 'ambiente',      titulo: '📝 Completar o Relatório',
+      enunciado: 'Complete o relatório de teste de API preenchendo as lacunas:' },
+];
+
+const RESPOSTAS_APIS = {
+    api1:  ['101', '2', '102'],
+    api2:  ['3'],
+    api3:  'drag',
+    api4:  'toggle',
+    api5:  'drag',
+    api6:  'hotspot',
+    api7:  ['10'],
+    api8:  ['api1', 'API1'],
+    api9:  ['api5', 'API5'],
+    api10: 'ordem',
+    api11: 'map',
+    api12: 'toggle',
+    api13: 'hotspot',
+    api14: 'ordem',
+    api15: 'blanks',
+};
+
+const testesApis = CONTEUDO_APIS.map(ex => ({ id: ex.id }));
+
+const ALUNOS_APIS = [
+    { usuario: 'antonio',  senha: 'M', nomeExibicao: 'Antonio M' },
+    { usuario: 'laura',    senha: 'M', nomeExibicao: 'Laura M' },
+    { usuario: 'max',      senha: 'C', nomeExibicao: 'Max C' },
+    { usuario: 'sergio',   senha: 'B', nomeExibicao: 'Sérgio B' },
+    { usuario: 'aline',    senha: 'B', nomeExibicao: 'Aline B' },
+    { usuario: 'enzo',     senha: 'V', nomeExibicao: 'Enzo V' },
+    { usuario: 'fernanda', senha: 'A', nomeExibicao: 'Fernanda A' },
+    { usuario: 'maiara',   senha: 'M', nomeExibicao: 'Maiara M' },
+    { usuario: 'paulo',    senha: 'B', nomeExibicao: 'Paulo B' }
+];
+const CREDENCIAIS_APIS = {};
+ALUNOS_APIS.forEach(a => { CREDENCIAIS_APIS[a.usuario] = a; });
+
+function normalizarRespostaApis(r) {
+    return String(r || '').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
+}
+
+function exigirLoginApis(req, res, next) {
+    if (req.session.apisAluno) return next();
+    res.redirect('/apis');
+}
+
+// --- Render helpers ---
+function renderSidebarApis() {
+    return CONCEITOS_APIS.map((c, i) => `
+        <div class="surf-category">
+            <div class="surf-cat-header" onclick="toggleConceitoApi(${i})">
+                <span class="surf-icon">${c.icone}</span>
+                <span class="surf-cat-name">${c.nome}</span>
+                <span class="surf-cat-arrow" id="aarrow-${i}">▶</span>
+            </div>
+            <div class="surf-cat-body" id="aconceito-${i}">
+                <p>${c.descricao}</p>
+                <p style="margin-top:7px;color:#5B21B6;font-style:italic;"><strong>Exemplo:</strong> ${c.exemplo}</p>
+            </div>
+        </div>
+    `).join('');
+}
+
+function renderDragCardApis(teste, ex, idx, items, col1Label, col2Label, col1Val, col2Val) {
+    const itemsShuf = shuffleParaAluno([...items], 'apis' + teste.id);
+    const faseCorMap = { observacao:'#3B82F6', diferenciacao:'#D97706', classificacao:'#DC2626', sintese:'#7C3AED', ambiente:'#0891B2' };
+    const faseCor = faseCorMap[ex.fase] || '#7C3AED';
+    const faseNome = { observacao:'Observação', diferenciacao:'Diferenciação', classificacao:'Classificação', sintese:'Síntese', ambiente:'Ambiente' }[ex.fase] || ex.fase;
+    return `<div class="exercise-card" id="card-${teste.id}">
+        <div class="card-header">
+            <span class="card-badge" style="background:${faseCor}20;color:${faseCor};">Fase ${faseNome}</span>
+            <span class="card-num">Exercício ${idx+1} de 15 <span id="check-${teste.id}"></span></span>
+        </div>
+        <h3>${ex.titulo}</h3>
+        <p class="card-enunciado">${ex.enunciado}</p>
+        <div class="drag-arena" id="arena-${teste.id}">
+            <div class="drag-col" id="col-${teste.id}-${col1Val}" ondragover="event.preventDefault()" ondrop="drop(event,'${teste.id}','${col1Val}')">
+                <div class="drag-col-label" style="background:${faseCor}15;color:${faseCor};">${col1Label}</div>
+                <div class="drag-col-items" id="items-${teste.id}-${col1Val}"></div>
+            </div>
+            <div class="drag-col" id="col-${teste.id}-${col2Val}" ondragover="event.preventDefault()" ondrop="drop(event,'${teste.id}','${col2Val}')">
+                <div class="drag-col-label" style="background:#6B728020;color:#374151;">${col2Label}</div>
+                <div class="drag-col-items" id="items-${teste.id}-${col2Val}"></div>
+            </div>
+        </div>
+        <div class="drag-source" id="source-${teste.id}">
+            ${itemsShuf.map(item => `<div class="drag-item" id="dragitem-${teste.id}-${item.id}" draggable="true" ondragstart="dragStart(event,'${teste.id}','${item.id}')" data-ex="${teste.id}" data-id="${item.id}">${item.texto}</div>`).join('')}
+        </div>
+        <button class="btn-validar" onclick="validarDragApis('${teste.id}')" style="background:${faseCor};">✅ Validar</button>
+        <div class="feedback" id="fb-${teste.id}"></div>
+    </div>`;
+}
+
+function renderToggleCardApis(teste, ex, idx, items, instrucaoAtivar) {
+    const faseCorMap = { observacao:'#3B82F6', diferenciacao:'#D97706', classificacao:'#DC2626', sintese:'#7C3AED', ambiente:'#0891B2' };
+    const faseCor = faseCorMap[ex.fase] || '#7C3AED';
+    const faseNome = { observacao:'Observação', diferenciacao:'Diferenciação', classificacao:'Classificação', sintese:'Síntese', ambiente:'Ambiente' }[ex.fase] || ex.fase;
+    return `<div class="exercise-card" id="card-${teste.id}">
+        <div class="card-header">
+            <span class="card-badge" style="background:${faseCor}20;color:${faseCor};">Fase ${faseNome}</span>
+            <span class="card-num">Exercício ${idx+1} de 15 <span id="check-${teste.id}"></span></span>
+        </div>
+        <h3>${ex.titulo}</h3>
+        <p class="card-enunciado">${ex.enunciado}</p>
+        <div class="stories-list">
+            ${items.map(s => `
+            <div class="story-card">
+                <label class="toggle-sw">
+                    <input type="checkbox" id="atoggle-${teste.id}-${s.id}">
+                    <span class="toggle-track"></span>
+                </label>
+                <div style="flex:1">
+                    <span style="font-size:11px;font-weight:700;color:#7C3AED;background:#f3f0ff;padding:2px 7px;border-radius:999px;">${s.tag || s.id.toUpperCase()}</span>
+                    <p style="margin:5px 0 0;font-size:13px;color:#374151;">${s.texto}</p>
+                </div>
+            </div>`).join('')}
+        </div>
+        <button class="btn-validar" onclick="validarToggleApis('${teste.id}','atoggle')" style="background:${faseCor};">✅ Validar</button>
+        <div class="feedback" id="fb-${teste.id}"></div>
+    </div>`;
+}
+
+function renderHotspotJsonCard(teste, ex, idx) {
+    const faseCorMap = { observacao:'#3B82F6', diferenciacao:'#D97706', classificacao:'#DC2626', sintese:'#7C3AED', ambiente:'#0891B2' };
+    const faseCor = faseCorMap[ex.fase] || '#7C3AED';
+    const faseNome = { observacao:'Observação', diferenciacao:'Diferenciação', classificacao:'Classificação', sintese:'Síntese', ambiente:'Ambiente' }[ex.fase] || ex.fase;
+    const campos = [
+        { id:'id',         label:'"id"',         valor:'"1"' },
+        { id:'nome',       label:'"nome"',       valor:'"Maria Silva"' },
+        { id:'email',      label:'"email"',      valor:'"maria@loja.com"' },
+        { id:'cpf',        label:'"cpf"',        valor:'"123.456.789-00"' },
+        { id:'senha_hash', label:'"senha_hash"', valor:'"$2b$10$xKp..."' },
+        { id:'saldo',      label:'"saldo"',      valor:'950.00' },
+        { id:'plano',      label:'"plano"',      valor:'"premium"' },
+        { id:'criado_em',  label:'"criado_em"',  valor:'"2024-01-10"' },
+    ];
+    return `<div class="exercise-card" id="card-${teste.id}">
+        <div class="card-header">
+            <span class="card-badge" style="background:${faseCor}20;color:${faseCor};">Fase ${faseNome}</span>
+            <span class="card-num">Exercício ${idx+1} de 15 <span id="check-${teste.id}"></span></span>
+        </div>
+        <h3>${ex.titulo}</h3>
+        <p class="card-enunciado">${ex.enunciado}</p>
+        <div style="background:#1e1e2e;border-radius:10px;padding:16px 20px;font-family:monospace;font-size:13px;color:#cdd6f4;margin-bottom:16px;">
+            <span style="color:#89b4fa;">{</span><br>
+            ${campos.map(c => `  <span class="json-field" id="jf-${teste.id}-${c.id}" onclick="toggleJsonField('${teste.id}','${c.id}')" style="cursor:pointer;display:inline-block;border-radius:4px;padding:1px 3px;transition:background 0.15s;">${c.label}<span style="color:#a6e3a1;">:</span> <span style="color:#fab387;">${c.valor}</span>,</span><br>`).join('')}
+            <span style="color:#89b4fa;">}</span>
+        </div>
+        <p style="font-size:12px;color:#6D28D9;font-style:italic;">💡 Clique nos campos para marcá-los como problemáticos. Clique novamente para desmarcar.</p>
+        <button class="btn-validar" onclick="validarHotspotJson('${teste.id}')" style="background:${faseCor};">✅ Validar</button>
+        <div class="feedback" id="fb-${teste.id}"></div>
+    </div>`;
+}
+
+function renderMapCardApis(teste, ex, idx) {
+    const faseCorMap = { observacao:'#3B82F6', diferenciacao:'#D97706', classificacao:'#DC2626', sintese:'#7C3AED', ambiente:'#0891B2' };
+    const faseCor = faseCorMap[ex.fase] || '#7C3AED';
+    const faseNome = { observacao:'Observação', diferenciacao:'Diferenciação', classificacao:'Classificação', sintese:'Síntese', ambiente:'Ambiente' }[ex.fase] || ex.fase;
+    const ext = ITEMS_MAP_API11.filter(i => i.zona === 'ext');
+    const int = ITEMS_MAP_API11.filter(i => i.zona === 'int');
+    return `<div class="exercise-card" id="card-${teste.id}">
+        <div class="card-header">
+            <span class="card-badge" style="background:${faseCor}20;color:${faseCor};">Fase ${faseNome}</span>
+            <span class="card-num">Exercício ${idx+1} de 15 <span id="check-${teste.id}"></span></span>
+        </div>
+        <h3>${ex.titulo}</h3>
+        <p class="card-enunciado">${ex.enunciado}</p>
+        <div class="env-map" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+            <div style="border:2px dashed #DC2626;border-radius:10px;padding:12px;">
+                <div style="font-size:11px;font-weight:700;color:#DC2626;margin-bottom:10px;text-transform:uppercase;">🌐 Zona Externa (Internet)</div>
+                ${ext.map(item => `<div class="map-comp" id="mapapi-${teste.id}-${item.id}" onclick="toggleMapApi('${teste.id}','${item.id}')" style="margin-bottom:8px;">${item.emoji} ${item.nome}</div>`).join('')}
+            </div>
+            <div style="border:2px dashed #059669;border-radius:10px;padding:12px;">
+                <div style="font-size:11px;font-weight:700;color:#059669;margin-bottom:10px;text-transform:uppercase;">🔒 Zona Interna (Rede Privada)</div>
+                ${int.map(item => `<div class="map-comp" id="mapapi-${teste.id}-${item.id}" onclick="toggleMapApi('${teste.id}','${item.id}')" style="margin-bottom:8px;">${item.emoji} ${item.nome}</div>`).join('')}
+            </div>
+        </div>
+        <p style="font-size:12px;color:#6D28D9;font-style:italic;">💡 Selecione apenas os componentes acessíveis diretamente pela internet.</p>
+        <button class="btn-validar" onclick="validarMapaApi('${teste.id}')" style="background:${faseCor};">✅ Validar</button>
+        <div class="feedback" id="fb-${teste.id}"></div>
+    </div>`;
+}
+
+function renderOrdemCardApis(teste, ex, idx, passos, aluno) {
+    const faseCorMap = { observacao:'#3B82F6', diferenciacao:'#D97706', classificacao:'#DC2626', sintese:'#7C3AED', ambiente:'#0891B2' };
+    const faseCor = faseCorMap[ex.fase] || '#7C3AED';
+    const faseNome = { observacao:'Observação', diferenciacao:'Diferenciação', classificacao:'Classificação', sintese:'Síntese', ambiente:'Ambiente' }[ex.fase] || ex.fase;
+    const shuffled = shuffleParaAluno([...passos], aluno + teste.id);
+    return `<div class="exercise-card" id="card-${teste.id}">
+        <div class="card-header">
+            <span class="card-badge" style="background:${faseCor}20;color:${faseCor};">Fase ${faseNome}</span>
+            <span class="card-num">Exercício ${idx+1} de 15 <span id="check-${teste.id}"></span></span>
+        </div>
+        <h3>${ex.titulo}</h3>
+        <p class="card-enunciado">${ex.enunciado}</p>
+        <ol class="ordem-list" id="ordem-list-${teste.id}">
+            ${shuffled.map(p => `<li class="ordem-item" id="ordemapi-${teste.id}-${p.id}" data-id="${p.id}" draggable="true"
+                ondragstart="apiOrdemDragStart(event,'${p.id}')"
+                ondragover="apiOrdemDragOver(event,'${teste.id}','${p.id}')"
+                ondragleave="apiOrdemDragLeave(event)"
+                ondrop="apiOrdemDrop(event,'${teste.id}','${p.id}')">
+                <span class="ordem-handle">⠿</span>${p.texto}
+            </li>`).join('')}
+        </ol>
+        <button class="btn-validar" onclick="validarOrdemApi('${teste.id}')" style="background:${faseCor};">✅ Validar</button>
+        <div class="feedback" id="fb-${teste.id}"></div>
+    </div>`;
+}
+
+function renderSwaggerHotspotCard(teste, ex, idx) {
+    const faseCorMap = { observacao:'#3B82F6', diferenciacao:'#D97706', classificacao:'#DC2626', sintese:'#7C3AED', ambiente:'#0891B2' };
+    const faseCor = faseCorMap[ex.fase] || '#7C3AED';
+    const faseNome = { observacao:'Observação', diferenciacao:'Diferenciação', classificacao:'Classificação', sintese:'Síntese', ambiente:'Ambiente' }[ex.fase] || ex.fase;
+    const endpoints = [
+        { id:'login',     method:'POST', path:'/api/login',           auth: false, label:'Autenticação pública' },
+        { id:'produtos',  method:'GET',  path:'/api/produtos',        auth: false, label:'Catálogo de produtos' },
+        { id:'pedidos',   method:'GET',  path:'/api/pedidos/{id}',    auth: true,  label:'Consultar pedido' },
+        { id:'admin',     method:'DELETE',path:'/api/admin/users/{id}',auth: true, label:'Remover usuário (admin)' },
+        { id:'relatorio', method:'GET',  path:'/api/relatorio-vendas',auth: true,  label:'Relatório de vendas' },
+        { id:'status',    method:'GET',  path:'/api/status',          auth: false, label:'Health check' },
+    ];
+    const methodColor = { GET:'#61affe', POST:'#49cc90', DELETE:'#f93e3e', PUT:'#fca130', PATCH:'#50e3c2' };
+    return `<div class="exercise-card" id="card-${teste.id}">
+        <div class="card-header">
+            <span class="card-badge" style="background:${faseCor}20;color:${faseCor};">Fase ${faseNome}</span>
+            <span class="card-num">Exercício ${idx+1} de 15 <span id="check-${teste.id}"></span></span>
+        </div>
+        <h3>${ex.titulo}</h3>
+        <p class="card-enunciado">${ex.enunciado}</p>
+        <div style="border:2px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:16px;font-family:sans-serif;">
+            <div style="background:#173752;padding:10px 16px;color:white;font-size:13px;font-weight:700;">📄 API Documentation — Sistema de Pedidos v2.1</div>
+            ${endpoints.map(ep => `
+            <div class="swagger-ep" id="swep-${teste.id}-${ep.id}" onclick="toggleSwaggerEp('${teste.id}','${ep.id}')"
+                style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #e2e8f0;cursor:pointer;transition:background 0.15s;">
+                <span style="background:${methodColor[ep.method]||'#aaa'};color:#fff;font-size:11px;font-weight:700;padding:3px 8px;border-radius:4px;min-width:52px;text-align:center;">${ep.method}</span>
+                <span style="font-family:monospace;font-size:12px;color:#374151;flex:1;">${ep.path}</span>
+                <span style="font-size:11px;color:#64748b;">${ep.label}</span>
+                <span style="font-size:16px;">${ep.auth ? '🔒' : '🌐'}</span>
+            </div>`).join('')}
+        </div>
+        <p style="font-size:12px;color:#6D28D9;font-style:italic;">💡 🔒 = deveria exigir auth. 🌐 = público. Clique nos endpoints que estão mal configurados (sem auth quando deveriam ter).</p>
+        <button class="btn-validar" onclick="validarSwaggerHotspot('${teste.id}')" style="background:${faseCor};">✅ Validar</button>
+        <div class="feedback" id="fb-${teste.id}"></div>
+    </div>`;
+}
+
+function renderBlanksCardApis(teste, ex, idx) {
+    const faseCorMap = { observacao:'#3B82F6', diferenciacao:'#D97706', classificacao:'#DC2626', sintese:'#7C3AED', ambiente:'#0891B2' };
+    const faseCor = faseCorMap[ex.fase] || '#7C3AED';
+    const faseNome = { observacao:'Observação', diferenciacao:'Diferenciação', classificacao:'Classificação', sintese:'Síntese', ambiente:'Ambiente' }[ex.fase] || ex.fase;
+    return `<div class="exercise-card" id="card-${teste.id}">
+        <div class="card-header">
+            <span class="card-badge" style="background:${faseCor}20;color:${faseCor};">Fase ${faseNome}</span>
+            <span class="card-num">Exercício ${idx+1} de 15 <span id="check-${teste.id}"></span></span>
+        </div>
+        <h3>${ex.titulo}</h3>
+        <p class="card-enunciado">${ex.enunciado}</p>
+        <div class="report-tpl" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:18px 22px;font-size:13px;line-height:2.2;color:#374151;">
+            <strong>Relatório de Teste de API — Sprint 12</strong><br>
+            <strong>Endpoint testado:</strong> GET /api/pedidos/{id}<br>
+            <strong>Categoria OWASP:</strong>
+            <select class="blank-sel" id="ablank-${teste.id}-b1">${BLANKS_API15.find(b=>b.id==='b1').opcoes.map(o=>`<option value="${o}">${o}</option>`).join('')}</select>
+            <br>
+            <strong>Campo sensível exposto:</strong>
+            <select class="blank-sel" id="ablank-${teste.id}-b2">${BLANKS_API15.find(b=>b.id==='b2').opcoes.map(o=>`<option value="${o}">${o}</option>`).join('')}</select>
+            <br>
+            <strong>Método HTTP da rota de exclusão vulnerável:</strong>
+            <select class="blank-sel" id="ablank-${teste.id}-b3">${BLANKS_API15.find(b=>b.id==='b3').opcoes.map(o=>`<option value="${o}">${o}</option>`).join('')}</select>
+            <br>
+            <strong>Recomendação principal:</strong>
+            <select class="blank-sel" id="ablank-${teste.id}-b4" style="min-width:220px;">${BLANKS_API15.find(b=>b.id==='b4').opcoes.map(o=>`<option value="${o}">${o}</option>`).join('')}</select>
+        </div>
+        <button class="btn-validar" onclick="validarBlanksApi('${teste.id}')" style="background:${faseCor};">✅ Validar</button>
+        <div class="feedback" id="fb-${teste.id}"></div>
+    </div>`;
+}
+
+function renderCardApis(teste, ex, idx, aluno) {
+    const faseCorMap = { observacao:'#3B82F6', diferenciacao:'#D97706', classificacao:'#DC2626', sintese:'#7C3AED', ambiente:'#0891B2' };
+    const faseCor = faseCorMap[ex.fase] || '#7C3AED';
+    const faseNome = { observacao:'Observação', diferenciacao:'Diferenciação', classificacao:'Classificação', sintese:'Síntese', ambiente:'Ambiente' }[ex.fase] || ex.fase;
+
+    if (ex.id === 'api3') return renderDragCardApis(teste, ex, idx, ITEMS_DRAG_API3, '🔐 Precisa de Auth', '🌐 Pode ser Público', 'auth', 'publico');
+    if (ex.id === 'api4') return renderToggleCardApis(teste, ex, idx, TOGGLES_API4, 'Deve exigir autenticação');
+    if (ex.id === 'api5') return renderDragCardApis(teste, ex, idx, ITEMS_DRAG_API5, '⚠️ Vulnerabilidade de API', '✅ Comportamento Aceitável', 'vuln', 'ok');
+    if (ex.id === 'api6') return renderHotspotJsonCard(teste, ex, idx);
+    if (ex.id === 'api10') return renderOrdemCardApis(teste, ex, idx, PASSOS_API10, aluno);
+    if (ex.id === 'api11') return renderMapCardApis(teste, ex, idx);
+    if (ex.id === 'api12') return renderToggleCardApis(teste, ex, idx, STORIES_API12, 'Cria/expande superfície de API');
+    if (ex.id === 'api13') return renderSwaggerHotspotCard(teste, ex, idx);
+    if (ex.id === 'api14') return renderOrdemCardApis(teste, ex, idx, PASSOS_API14, aluno);
+    if (ex.id === 'api15') return renderBlanksCardApis(teste, ex, idx);
+
+    // Texto simples
+    return `<div class="exercise-card" id="card-${teste.id}">
+        <div class="card-header">
+            <span class="card-badge" style="background:${faseCor}20;color:${faseCor};">Fase ${faseNome}</span>
+            <span class="card-num">Exercício ${idx+1} de 15 <span id="check-${teste.id}"></span></span>
+        </div>
+        <h3>${ex.titulo}</h3>
+        <p class="card-enunciado">${ex.enunciado}</p>
+        <input type="text" id="resp-${teste.id}" class="input-resposta" placeholder="${ex.placeholder || 'Digite sua resposta'}">
+        <button class="btn-validar" onclick="validarTextoApi('${teste.id}')" style="background:${faseCor};">✅ Validar</button>
+        <div class="feedback" id="fb-${teste.id}"></div>
+    </div>`;
+}
+
+function renderExerciciosApis(aluno) {
+    return testesApis.map((t, i) => {
+        const ex = CONTEUDO_APIS.find(e => e.id === t.id);
+        return renderCardApis(t, ex, i, aluno);
+    }).join('');
+}
+
+const estiloApis = `
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'IBM Plex Sans', system-ui, sans-serif; background: #f5f3ff; color: #1e1b4b; }
+    .container { display: flex; min-height: 100vh; }
+    .sidebar { width: 280px; min-height: 100vh; background: #fff; border-right: 1px solid #ede9fe; padding: 24px 16px; position: sticky; top: 0; overflow-y: auto; max-height: 100vh; flex-shrink: 0; }
+    .sidebar-brand h2 { font-size: 15px; color: #4C1D95; margin-bottom: 4px; }
+    .sidebar-brand p  { font-size: 12px; color: #6D28D9; }
+    .contador-box { background: #f3f0ff; border-radius: 8px; padding: 10px 14px; margin: 14px 0; }
+    .contador-box p { font-size: 13px; font-weight: 700; color: #7C3AED; }
+    .surf-section-title { font-size: 10px; font-weight: 700; color: #9CA3AF; text-transform: uppercase; letter-spacing: .08em; margin: 16px 0 8px; }
+    .surf-hint { font-size: 11px; color: #9CA3AF; margin-bottom: 10px; }
+    .surf-category { border: 1px solid #ede9fe; border-radius: 8px; margin-bottom: 8px; overflow: hidden; }
+    .surf-cat-header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; cursor: pointer; background: #faf9ff; }
+    .surf-icon { font-size: 16px; }
+    .surf-cat-name { flex: 1; font-size: 12px; font-weight: 600; color: #4C1D95; }
+    .surf-cat-arrow { font-size: 10px; color: #7C3AED; transition: transform .2s; }
+    .surf-cat-body { display: none; padding: 10px 12px; font-size: 12px; line-height: 1.6; color: #374151; background: #fff; border-top: 1px solid #ede9fe; }
+    .sidebar-actions { margin-top: 20px; display: flex; flex-direction: column; gap: 8px; }
+    .btn-reset  { background: #f3f0ff; color: #7C3AED; border: 1px solid #ede9fe; border-radius: 8px; padding: 9px; font-size: 12px; cursor: pointer; }
+    .btn-logout { background: #fee2e2; color: #b91c1c; border-radius: 8px; padding: 9px; font-size: 12px; text-align: center; text-decoration: none; }
+    .btn-hub    { background: #f1f5f9; color: #475569; border-radius: 8px; padding: 9px; font-size: 12px; text-align: center; text-decoration: none; }
+    .main { flex: 1; padding: 32px 28px; max-width: 820px; }
+    .main-header { margin-bottom: 28px; }
+    .main-header h2 { font-size: 22px; color: #4C1D95; margin-bottom: 6px; }
+    .main-header p  { font-size: 13px; color: #6D28D9; }
+    .exercise-card { background: #fff; border: 1px solid #ede9fe; border-radius: 14px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(124,58,237,.07); }
+    .exercise-card.concluido { border-color: #16a34a; background: #f0fdf4; }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .card-badge { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
+    .card-num   { font-size: 11px; color: #9CA3AF; }
+    .exercise-card h3 { font-size: 16px; color: #1e1b4b; margin-bottom: 10px; }
+    .card-enunciado { font-size: 13px; color: #374151; line-height: 1.7; margin-bottom: 16px; }
+    .input-resposta { width: 100%; border: 1px solid #c4b5fd; border-radius: 8px; padding: 10px 14px; font-size: 14px; outline: none; margin-bottom: 12px; }
+    .input-resposta:focus { border-color: #7C3AED; box-shadow: 0 0 0 3px #7c3aed20; }
+    .btn-validar { background: #7C3AED; color: white; border: none; border-radius: 8px; padding: 10px 22px; font-size: 13px; font-weight: 600; cursor: pointer; margin-bottom: 10px; }
+    .btn-validar:hover { opacity: .88; }
+    .feedback { font-size: 13px; font-weight: 600; min-height: 20px; }
+    .drag-arena { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+    .drag-col   { border: 2px dashed #c4b5fd; border-radius: 10px; padding: 10px; min-height: 100px; }
+    .drag-col-label { font-size: 11px; font-weight: 700; text-align: center; padding: 4px 8px; border-radius: 6px; margin-bottom: 8px; }
+    .drag-col-items { display: flex; flex-direction: column; gap: 6px; }
+    .drag-source { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+    .drag-item  { background: #f3f0ff; border: 1px solid #c4b5fd; border-radius: 8px; padding: 8px 12px; font-size: 12px; cursor: grab; user-select: none; }
+    .drag-item:active { cursor: grabbing; }
+    .drag-item.drag-errado { border-color: #dc2626; background: #fee2e2; animation: shake .4s; }
+    .stories-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+    .story-card { display: flex; align-items: flex-start; gap: 14px; background: #faf9ff; border: 1px solid #ede9fe; border-radius: 10px; padding: 12px 14px; }
+    .toggle-sw  { position: relative; width: 42px; height: 24px; flex-shrink: 0; margin-top: 2px; }
+    .toggle-sw input { opacity: 0; width: 0; height: 0; }
+    .toggle-track { position: absolute; inset: 0; background: #d1d5db; border-radius: 999px; cursor: pointer; transition: background .2s; }
+    .toggle-track::after { content: ''; position: absolute; left: 3px; top: 3px; width: 18px; height: 18px; background: white; border-radius: 50%; transition: transform .2s; }
+    .toggle-sw input:checked + .toggle-track { background: #7C3AED; }
+    .toggle-sw input:checked + .toggle-track::after { transform: translateX(18px); }
+    .map-comp { background: #f3f0ff; border: 2px solid #c4b5fd; border-radius: 8px; padding: 8px 12px; font-size: 12px; cursor: pointer; transition: all .15s; }
+    .map-comp.selected { background: #7C3AED; color: white; border-color: #7C3AED; }
+    .map-comp.mapa-erro { border-color: #dc2626; background: #fee2e2; animation: shake .4s; }
+    .ordem-list { list-style: none; display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+    .ordem-item { background: #f3f0ff; border: 1px solid #c4b5fd; border-radius: 8px; padding: 10px 14px; font-size: 13px; cursor: grab; display: flex; align-items: center; gap: 10px; }
+    .ordem-item.drag-over { border-color: #7C3AED; background: #ede9fe; }
+    .ordem-handle { color: #9CA3AF; font-size: 16px; }
+    .json-field.hs-selected { background: #7C3AED30; outline: 2px solid #7C3AED; border-radius: 4px; }
+    .json-field.hs-erro     { background: #dc262630; outline: 2px solid #dc2626; border-radius: 4px; animation: shake .4s; }
+    .swagger-ep.hs-selected { background: #7C3AED18 !important; outline: 2px solid #7C3AED; }
+    .swagger-ep.hs-erro     { background: #dc262618 !important; outline: 2px solid #dc2626; animation: shake .4s; }
+    .report-tpl { margin-bottom: 16px; }
+    .blank-sel  { border: 1px solid #c4b5fd; border-radius: 6px; padding: 3px 8px; font-size: 12px; background: white; cursor: pointer; margin: 0 4px; }
+    .blank-erro { border-color: #dc2626 !important; }
+    @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px)} 75%{transform:translateX(4px)} }
+`;
+
+const scriptApis = `
+    function toggleConceitoApi(i) {
+        const b = document.getElementById('aconceito-' + i);
+        const a = document.getElementById('aarrow-' + i);
+        if (b.style.display === 'block') { b.style.display='none'; a.style.transform=''; }
+        else { b.style.display='block'; a.style.transform='rotate(90deg)'; }
+    }
+
+    // --- Drag 2 colunas (reutiliza lógica compatível) ---
+    let apiDragExId = null, apiDragItemId = null;
+    function dragStart(event, exId, id) { apiDragExId = exId; apiDragItemId = id; event.dataTransfer.effectAllowed='move'; }
+    function drop(event, exId, col) {
+        event.preventDefault();
+        if (!apiDragItemId) return;
+        const el = document.getElementById('dragitem-' + exId + '-' + apiDragItemId);
+        if (el) document.getElementById('items-' + exId + '-' + col).appendChild(el);
+        apiDragItemId = null;
+    }
+    async function validarDragApis(exId) {
+        const fb = document.getElementById('fb-' + exId);
+        const classificacao = {};
+        document.querySelectorAll('[id^="dragitem-' + exId + '-"]').forEach(el => {
+            const id = el.id.replace('dragitem-' + exId + '-', '');
+            const par = el.parentElement;
+            if (par && par.id.startsWith('items-' + exId + '-')) {
+                classificacao[id] = par.id.replace('items-' + exId + '-', '');
+            }
+        });
+        try {
+            const r = await fetch('/apis/lab/validar', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ exercicioId: exId, classificacao }) });
+            const res = await r.json();
+            if (res.correto) { fb.textContent='✅ Correto!'; fb.style.color='#16a34a'; document.getElementById('card-'+exId).classList.add('concluido'); document.getElementById('check-'+exId).textContent='✅'; atualizarContadorApis(); }
+            else { fb.textContent='❌ ' + res.acertos + '/' + res.total + ' corretos. Revise a classificação.'; fb.style.color='#dc2626'; (res.erros||[]).forEach(id => { const el=document.getElementById('dragitem-'+exId+'-'+id); if(el) el.classList.add('drag-errado'); setTimeout(()=>el.classList.remove('drag-errado'),500); }); }
+        } catch(err) { fb.textContent='❌ Erro: '+err.message; fb.style.color='#dc2626'; }
+    }
+
+    // --- Toggle (api4 e api12) ---
+    async function validarToggleApis(exId, prefix) {
+        const fb = document.getElementById('fb-' + exId);
+        const ativados = [];
+        document.querySelectorAll('[id^="' + prefix + '-' + exId + '-"]').forEach(el => { if(el.checked) ativados.push(el.id.replace(prefix+'-'+exId+'-','')); });
+        try {
+            const r = await fetch('/apis/lab/validar', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ exercicioId: exId, ativados }) });
+            const res = await r.json();
+            if (res.correto) { fb.textContent='✅ Correto!'; fb.style.color='#16a34a'; document.getElementById('card-'+exId).classList.add('concluido'); document.getElementById('check-'+exId).textContent='✅'; atualizarContadorApis(); }
+            else { fb.textContent='❌ '+res.acertos+'/'+res.total+' corretos. Revise os toggles.'; fb.style.color='#dc2626'; }
+        } catch(err) { fb.textContent='❌ Erro: '+err.message; fb.style.color='#dc2626'; }
+    }
+
+    // --- Hotspot JSON (api6) ---
+    function toggleJsonField(exId, id) {
+        const el = document.getElementById('jf-' + exId + '-' + id);
+        if (el) { el.classList.toggle('hs-selected'); el.classList.remove('hs-erro'); }
+    }
+    async function validarHotspotJson(exId) {
+        const fb = document.getElementById('fb-' + exId);
+        const clicados = [];
+        document.querySelectorAll('[id^="jf-' + exId + '-"]').forEach(el => { if(el.classList.contains('hs-selected')) clicados.push(el.id.replace('jf-'+exId+'-','')); });
+        try {
+            const r = await fetch('/apis/lab/validar', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ exercicioId: exId, clicados }) });
+            const res = await r.json();
+            if (res.correto) { fb.textContent='✅ Correto! Esses campos não deveriam estar na resposta.'; fb.style.color='#16a34a'; document.getElementById('card-'+exId).classList.add('concluido'); document.getElementById('check-'+exId).textContent='✅'; atualizarContadorApis(); }
+            else { fb.textContent='❌ '+res.acertos+'/'+res.total+' corretos.'; fb.style.color='#dc2626'; (res.erros||[]).forEach(id=>{ const el=document.getElementById('jf-'+exId+'-'+id); if(el) el.classList.add('hs-erro'); }); }
+        } catch(err) { fb.textContent='❌ Erro: '+err.message; fb.style.color='#dc2626'; }
+    }
+
+    // --- Mapa (api11) ---
+    function toggleMapApi(exId, id) {
+        const el = document.getElementById('mapapi-' + exId + '-' + id);
+        if (el) { el.classList.toggle('selected'); el.classList.remove('mapa-erro'); }
+    }
+    async function validarMapaApi(exId) {
+        const fb = document.getElementById('fb-' + exId);
+        const selecionados = [];
+        document.querySelectorAll('[id^="mapapi-' + exId + '-"]').forEach(el => { if(el.classList.contains('selected')) selecionados.push(el.id.replace('mapapi-'+exId+'-','')); });
+        try {
+            const r = await fetch('/apis/lab/validar', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ exercicioId: exId, selecionados }) });
+            const res = await r.json();
+            if (res.correto) { fb.textContent='✅ Correto! Superfície de API mapeada.'; fb.style.color='#16a34a'; document.getElementById('card-'+exId).classList.add('concluido'); document.getElementById('check-'+exId).textContent='✅'; atualizarContadorApis(); }
+            else { fb.textContent='❌ '+res.acertos+'/'+res.total+' corretos.'; fb.style.color='#dc2626'; (res.erros||[]).forEach(id=>{ const el=document.getElementById('mapapi-'+exId+'-'+id); if(el) el.classList.add('mapa-erro'); }); }
+        } catch(err) { fb.textContent='❌ Erro: '+err.message; fb.style.color='#dc2626'; }
+    }
+
+    // --- Ordem (api10 e api14) ---
+    let apiOrdemSrcId = null;
+    function apiOrdemDragStart(event, id) { apiOrdemSrcId = id; event.dataTransfer.effectAllowed='move'; }
+    function apiOrdemDragOver(event, exId, id) {
+        event.preventDefault();
+        if (!apiOrdemSrcId || apiOrdemSrcId===id) return;
+        document.querySelectorAll('.ordem-item').forEach(el=>el.classList.remove('drag-over'));
+        const el = document.getElementById('ordemapi-'+exId+'-'+id);
+        if (el) el.classList.add('drag-over');
+    }
+    function apiOrdemDragLeave(event) { event.currentTarget.classList.remove('drag-over'); }
+    function apiOrdemDrop(event, exId, targetId) {
+        event.preventDefault();
+        if (!apiOrdemSrcId || apiOrdemSrcId===targetId) return;
+        const list = document.getElementById('ordem-list-'+exId);
+        const srcEl = document.getElementById('ordemapi-'+exId+'-'+apiOrdemSrcId);
+        const tgtEl = document.getElementById('ordemapi-'+exId+'-'+targetId);
+        if (srcEl && tgtEl) list.insertBefore(srcEl, tgtEl);
+        document.querySelectorAll('.ordem-item').forEach(el=>el.classList.remove('drag-over'));
+        apiOrdemSrcId = null;
+    }
+    async function validarOrdemApi(exId) {
+        const fb = document.getElementById('fb-' + exId);
+        const list = document.getElementById('ordem-list-'+exId);
+        const ordem = [...list.querySelectorAll('.ordem-item')].map(el=>el.dataset.id);
+        try {
+            const r = await fetch('/apis/lab/validar', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ exercicioId: exId, ordem }) });
+            const res = await r.json();
+            if (res.correto) { fb.textContent='✅ Sequência correta!'; fb.style.color='#16a34a'; document.getElementById('card-'+exId).classList.add('concluido'); document.getElementById('check-'+exId).textContent='✅'; atualizarContadorApis(); }
+            else { fb.textContent='❌ '+res.acertos+'/'+res.total+' passos na posição certa.'; fb.style.color='#dc2626'; }
+        } catch(err) { fb.textContent='❌ Erro: '+err.message; fb.style.color='#dc2626'; }
+    }
+
+    // --- Swagger hotspot (api13) ---
+    function toggleSwaggerEp(exId, id) {
+        const el = document.getElementById('swep-'+exId+'-'+id);
+        if (el) { el.classList.toggle('hs-selected'); el.classList.remove('hs-erro'); }
+    }
+    async function validarSwaggerHotspot(exId) {
+        const fb = document.getElementById('fb-' + exId);
+        const clicados = [];
+        document.querySelectorAll('[id^="swep-'+exId+'-"]').forEach(el=>{ if(el.classList.contains('hs-selected')) clicados.push(el.id.replace('swep-'+exId+'-','')); });
+        try {
+            const r = await fetch('/apis/lab/validar', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ exercicioId: exId, clicados }) });
+            const res = await r.json();
+            if (res.correto) { fb.textContent='✅ Correto! Endpoints sem autenticação identificados.'; fb.style.color='#16a34a'; document.getElementById('card-'+exId).classList.add('concluido'); document.getElementById('check-'+exId).textContent='✅'; atualizarContadorApis(); }
+            else { fb.textContent='❌ '+res.acertos+'/'+res.total+' corretos.'; fb.style.color='#dc2626'; (res.erros||[]).forEach(id=>{ const el=document.getElementById('swep-'+exId+'-'+id); if(el) el.classList.add('hs-erro'); }); }
+        } catch(err) { fb.textContent='❌ Erro: '+err.message; fb.style.color='#dc2626'; }
+    }
+
+    // --- Blanks (api15) ---
+    async function validarBlanksApi(exId) {
+        const fb = document.getElementById('fb-' + exId);
+        const respostas = {};
+        document.querySelectorAll('[id^="ablank-'+exId+'-"]').forEach(el=>{ respostas[el.id.replace('ablank-'+exId+'-','')] = el.value; });
+        try {
+            const r = await fetch('/apis/lab/validar', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ exercicioId: exId, respostas }) });
+            const res = await r.json();
+            if (res.correto) { fb.textContent='✅ Relatório preenchido corretamente!'; fb.style.color='#16a34a'; document.getElementById('card-'+exId).classList.add('concluido'); document.getElementById('check-'+exId).textContent='✅'; atualizarContadorApis(); }
+            else { fb.textContent='❌ '+res.acertos+'/'+res.total+' campos corretos.'; fb.style.color='#dc2626'; (res.erros||[]).forEach(id=>{ const el=document.getElementById('ablank-'+exId+'-'+id); if(el) el.classList.add('blank-erro'); }); }
+        } catch(err) { fb.textContent='❌ Erro: '+err.message; fb.style.color='#dc2626'; }
+    }
+
+    // --- Texto simples ---
+    async function validarTextoApi(exId) {
+        const fb = document.getElementById('fb-' + exId);
+        const resposta = document.getElementById('resp-' + exId).value;
+        try {
+            const r = await fetch('/apis/lab/validar', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ exercicioId: exId, resposta }) });
+            const res = await r.json();
+            if (res.correto) { fb.textContent='✅ Correto!'; fb.style.color='#16a34a'; document.getElementById('card-'+exId).classList.add('concluido'); document.getElementById('check-'+exId).textContent='✅'; atualizarContadorApis(); }
+            else { fb.textContent='❌ Não é bem isso. Tente novamente.'; fb.style.color='#dc2626'; }
+        } catch(err) { fb.textContent='❌ Erro: '+err.message; fb.style.color='#dc2626'; }
+    }
+
+    async function atualizarContadorApis() {
+        try {
+            const r = await fetch('/apis/lab/progresso');
+            const res = await r.json();
+            document.getElementById('contador-progresso').textContent = (res.concluidos||[]).length + ' / 15 concluídos';
+        } catch(e) {}
+    }
+
+    async function carregarProgressoApis() {
+        try {
+            const r = await fetch('/apis/lab/progresso');
+            const res = await r.json();
+            (res.concluidos||[]).forEach(id => {
+                const card  = document.getElementById('card-'  + id);
+                const check = document.getElementById('check-' + id);
+                if (card)  card.classList.add('concluido');
+                if (check) check.textContent = '✅';
+            });
+            document.getElementById('contador-progresso').textContent = (res.concluidos||[]).length + ' / 15 concluídos';
+        } catch(err) { console.error('Erro progresso APIs:', err); }
+    }
+
+    async function resetarApis() {
+        if (!confirm('⚠️ Isso vai zerar todo o seu progresso. Continuar?')) return;
+        try {
+            const r = await fetch('/apis/lab/reset', { method:'POST' });
+            const res = await r.json();
+            alert(res.mensagem || res.erro);
+            window.location.reload();
+        } catch(err) { alert('❌ Erro: ' + err.message); }
+    }
+
+    carregarProgressoApis();
+`;
+
+// --- Rotas ---
+app.get('/apis', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'apis-login.html'));
+});
+
+app.post('/apis/login', (req, res) => {
+    const usuario = String(req.body.usuario || '').trim().toLowerCase();
+    const senha   = String(req.body.senha   || '').trim();
+    const conta   = CREDENCIAIS_APIS[usuario];
+    if (!conta || conta.senha !== senha) return res.redirect('/apis?erro=1');
+    req.session.apisAluno = usuario;
+    req.session.apisNome  = conta.nomeExibicao;
+    res.redirect('/apis/lab');
+});
+
+app.get('/apis/logout', (req, res) => {
+    req.session.apisAluno = null;
+    req.session.apisNome  = null;
+    res.redirect('/apis');
+});
+
+app.get('/apis/painel-professor/dados', async (req, res) => {
+    try {
+        const r = await pool.query('SELECT aluno, exercicio_id, concluido_em FROM apis_progresso');
+        const dados = {};
+        r.rows.forEach(row => { dados[row.aluno + ':' + row.exercicio_id] = row.concluido_em; });
+        res.json({ dados, alunos: ALUNOS_APIS.map(a => a.usuario), exercicios: testesApis.map(t => t.id) });
+    } catch (err) { res.status(500).json({ erro: err.message }); }
+});
+
+app.get('/apis/painel-professor', async (req, res) => {
+    try {
+        const r = await pool.query('SELECT aluno, exercicio_id, concluido_em FROM apis_progresso');
+        const concluidos = {};
+        r.rows.forEach(row => { concluidos[row.aluno + ':' + row.exercicio_id] = row.concluido_em; });
+
+        const headerCols = testesApis.map(t => `<th style="padding:6px 4px;border:1px solid #7C3AED;background:#4C1D95;color:white;font-size:11px;min-width:36px;">${t.id.replace('api','')}</th>`).join('');
+
+        const linhas = ALUNOS_APIS.map(a => {
+            const total = testesApis.filter(t => concluidos[a.usuario + ':' + t.id]).length;
+            const cels  = testesApis.map(t => {
+                const ts = concluidos[a.usuario + ':' + t.id];
+                if (ts) return `<td data-ts="${new Date(ts).getTime()}" style="padding:8px 5px;border:1px solid #7C3AED;text-align:center;background:#f0fdf4;font-size:13px;">✅</td>`;
+                return `<td style="padding:8px 5px;border:1px solid #7C3AED;text-align:center;background:#faf5ff;font-size:13px;">❌</td>`;
+            }).join('');
+            return `<tr>
+                <td style="padding:8px 10px;border:1px solid #7C3AED;font-weight:600;font-size:13px;white-space:nowrap;">${a.nomeExibicao}</td>
+                ${cels}
+                <td id="total-${a.usuario}" style="padding:8px 5px;border:1px solid #7C3AED;text-align:center;font-weight:bold;background:#ede9fe;font-size:13px;">${total}/15</td>
+                <td style="padding:4px 8px;border:1px solid #7C3AED;text-align:center;">
+                    <form method="POST" action="/apis/painel-professor/limpar/${a.usuario}" style="display:inline;">
+                        <button type="submit" style="background:#fee2e2;color:#b91c1c;border:none;border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;">reset</button>
+                    </form>
+                </td>
+            </tr>`;
+        }).join('');
+
+        res.send(`<!DOCTYPE html><html lang="pt-BR"><head>
+            <meta charset="UTF-8"><title>Painel — Segurança em APIs</title>
+            <style>body{font-family:system-ui,sans-serif;background:#f5f3ff;padding:32px;}
+            h1{color:#4C1D95;margin-bottom:4px;} .sub{color:#7C3AED;font-size:13px;margin-bottom:20px;}
+            table{border-collapse:collapse;width:100%;background:white;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(124,58,237,.1);}
+            th{text-align:center;} #status-auto{font-size:12px;color:#7C3AED;margin-bottom:12px;}</style>
+        </head><body>
+            <h1>🔮 Painel do Professor — Segurança em APIs</h1>
+            <div class="sub">Aula 18 · Atualização automática a cada 5 segundos</div>
+            <div id="status-auto">🟡 Aguardando primeira atualização...</div>
+            <div style="overflow-x:auto;">
+            <table>
+                <thead><tr>
+                    <th style="padding:8px 14px;border:1px solid #7C3AED;background:#4C1D95;color:white;text-align:left;">Aluno</th>
+                    ${headerCols}
+                    <th style="padding:6px 8px;border:1px solid #7C3AED;background:#4C1D95;color:white;">Total</th>
+                    <th style="padding:6px 8px;border:1px solid #7C3AED;background:#4C1D95;color:white;">Reset</th>
+                </tr></thead>
+                <tbody id="tbody-painel">${linhas}</tbody>
+            </table>
+            </div>
+            <script>
+                const ALUNOS_PAINEL   = ${JSON.stringify(ALUNOS_APIS.map(a=>a.usuario))};
+                const EXERCICIOS_PAI  = ${JSON.stringify(testesApis.map(t=>t.id))};
+                async function atualizarPainelApis() {
+                    try {
+                        const r = await fetch('/apis/painel-professor/dados');
+                        const { dados } = await r.json();
+                        const agora = Date.now();
+                        ALUNOS_PAINEL.forEach(aluno => {
+                            let total = 0;
+                            EXERCICIOS_PAI.forEach((exId, i) => {
+                                const linhas = document.querySelectorAll('#tbody-painel tr');
+                                const idx = ALUNOS_PAINEL.indexOf(aluno);
+                                const cel = linhas[idx] ? linhas[idx].querySelectorAll('td')[i+1] : null;
+                                if (!cel) return;
+                                const ts = dados[aluno + ':' + exId];
+                                if (ts) {
+                                    total++;
+                                    if (!cel.dataset.ts) {
+                                        cel.dataset.ts = new Date(ts).getTime();
+                                        cel.style.background = '#f0fdf4'; cel.style.color = '#15803d';
+                                        cel.innerHTML = '✅';
+                                    }
+                                } else {
+                                    cel.style.background = '#faf5ff'; cel.style.color = '#9CA3AF';
+                                    cel.innerHTML = '❌'; delete cel.dataset.ts;
+                                }
+                            });
+                            const totEl = document.getElementById('total-' + aluno);
+                            if (totEl) totEl.textContent = total + '/15';
+                        });
+                        document.getElementById('status-auto').textContent = '🟢 Atualizando automaticamente...';
+                    } catch(err) { document.getElementById('status-auto').textContent = '🔴 Falha: ' + err.message; }
+                }
+                setInterval(atualizarPainelApis, 5000);
+            </script>
+        </body></html>`);
+    } catch (err) {
+        res.status(500).send(`<p style="color:red;font-family:sans-serif;">❌ Erro: ${escapeHtml(err.message)}</p>`);
+    }
+});
+
+app.post('/apis/painel-professor/limpar/:aluno', async (req, res) => {
+    const aluno = req.params.aluno;
+    if (!CREDENCIAIS_APIS[aluno]) return res.status(400).send('Aluno desconhecido');
+    try {
+        await pool.query('DELETE FROM apis_progresso WHERE aluno=$1', [aluno]);
+        res.redirect('/apis/painel-professor');
+    } catch (err) {
+        res.status(500).send(`<p style="color:red;font-family:sans-serif;">❌ Erro: ${escapeHtml(err.message)}</p>`);
+    }
+});
+
+app.get('/apis/lab', exigirLoginApis, (req, res) => {
+    const aluno = req.session.apisAluno;
+    const nome  = req.session.apisNome;
+    res.send(`<!DOCTYPE html><html><head>
+        <meta charset="UTF-8">
+        <title>Segurança em APIs — ${escapeHtml(nome)}</title>
+        <style>${estiloApis}</style>
+    </head><body>
+    <div class="container">
+        <div class="sidebar">
+            <div class="sidebar-brand">
+                <h2>🔮 Segurança em APIs</h2>
+                <p>Olá, <strong>${escapeHtml(nome)}</strong></p>
+            </div>
+            <div class="contador-box">
+                <p id="contador-progresso">0 / 15 concluídos</p>
+            </div>
+            <div class="surf-section-title">Conceitos</div>
+            <p class="surf-hint">Clique em um conceito para ler antes de responder.</p>
+            ${renderSidebarApis()}
+            <div class="sidebar-actions">
+                <button class="btn-reset" onclick="resetarApis()">🔄 Resetar Progresso</button>
+                <a href="/apis/logout" class="btn-logout">🚪 Sair</a>
+                <a href="/" class="btn-hub">← Voltar ao Hub</a>
+            </div>
+        </div>
+        <div class="main">
+            <div class="main-header">
+                <h2>🔮 Segurança em APIs</h2>
+                <p>Descubra como APIs expõem dados e funcionalidades — e o que um atacante pode explorar.</p>
+            </div>
+            ${renderExerciciosApis(aluno)}
+        </div>
+    </div>
+    <script>${scriptApis}</script>
+    </body></html>`);
+});
+
+app.get('/apis/lab/progresso', exigirLoginApis, async (req, res) => {
+    const aluno = req.session.apisAluno;
+    try {
+        const r = await pool.query('SELECT exercicio_id FROM apis_progresso WHERE aluno=$1', [aluno]);
+        res.json({ concluidos: r.rows.map(row => row.exercicio_id) });
+    } catch (err) { res.status(500).json({ erro: err.message }); }
+});
+
+app.post('/apis/lab/validar', exigirLoginApis, async (req, res) => {
+    const aluno = req.session.apisAluno;
+    const { exercicioId, resposta, classificacao, selecionados, ordem, ativados, clicados, respostas: blanksR } = req.body;
+    const tipo = RESPOSTAS_APIS[exercicioId];
+    if (!tipo) return res.status(400).json({ correto: false, erro: 'Exercício desconhecido' });
+
+    let correto = false, acertos = 0, erros = [], total = 0;
+
+    if (tipo === 'drag') {
+        const items = exercicioId === 'api3' ? ITEMS_DRAG_API3 : ITEMS_DRAG_API5;
+        total = items.length;
+        items.forEach(item => {
+            if ((classificacao||{})[item.id] === item.correto) { acertos++; }
+            else { erros.push(item.id); }
+        });
+        correto = acertos === total;
+
+    } else if (tipo === 'toggle') {
+        const atv = Array.isArray(ativados) ? ativados : [];
+        const items = exercicioId === 'api4' ? TOGGLES_API4 : STORIES_API12;
+        total = items.length;
+        items.forEach(s => {
+            const ativado = atv.includes(s.id);
+            if (ativado === s.correto) { acertos++; }
+            else { erros.push(s.id); }
+        });
+        correto = acertos === total;
+
+    } else if (tipo === 'hotspot') {
+        const cli = Array.isArray(clicados) ? clicados : [];
+        const items = exercicioId === 'api6' ? HOTSPOTS_API6 : HOTSPOTS_API13;
+        total = items.length;
+        items.forEach(h => {
+            const clicado = cli.includes(h.id);
+            if (clicado === h.correto) { acertos++; }
+            else { erros.push(h.id); }
+        });
+        correto = acertos === total;
+
+    } else if (tipo === 'map') {
+        const sel = Array.isArray(selecionados) ? selecionados : [];
+        total = ITEMS_MAP_API11.length;
+        ITEMS_MAP_API11.forEach(item => {
+            const selecionado = sel.includes(item.id);
+            if (selecionado === item.correto) { acertos++; }
+            else { erros.push(item.id); }
+        });
+        correto = acertos === total;
+
+    } else if (tipo === 'ordem') {
+        const ord = Array.isArray(ordem) ? ordem : [];
+        const correta = exercicioId === 'api10' ? ORDEM_CORRETA_API10 : ORDEM_CORRETA_API14;
+        total = correta.length;
+        correta.forEach((id, i) => { if (ord[i] === id) acertos++; });
+        correto = acertos === total;
+
+    } else if (tipo === 'blanks') {
+        const rsps = blanksR || {};
+        total = BLANKS_API15.length;
+        BLANKS_API15.forEach(b => {
+            if ((rsps[b.id]||'').trim() === b.correto) { acertos++; }
+            else { erros.push(b.id); }
+        });
+        correto = acertos === total;
+
+    } else {
+        const norm = normalizarRespostaApis(resposta);
+        correto = Array.isArray(tipo)
+            ? tipo.some(v => normalizarRespostaApis(v) === norm)
+            : normalizarRespostaApis(tipo) === norm;
+    }
+
+    if (correto) {
+        try {
+            await pool.query(
+                'INSERT INTO apis_progresso (aluno, exercicio_id) VALUES ($1,$2) ON CONFLICT (aluno, exercicio_id) DO UPDATE SET concluido_em = NOW()',
+                [aluno, exercicioId]
+            );
+        } catch (err) { console.error('Erro progresso APIs:', err.message); }
+    }
+
+    const isSimples = !['drag','toggle','hotspot','map','ordem','blanks'].includes(tipo);
+    res.json(isSimples ? { correto } : { correto, acertos, total, erros });
+});
+
+app.post('/apis/lab/reset', exigirLoginApis, async (req, res) => {
+    const aluno = req.session.apisAluno;
+    try {
+        await pool.query('DELETE FROM apis_progresso WHERE aluno=$1', [aluno]);
+        res.json({ sucesso: true, mensagem: `✅ Progresso de ${aluno} no Lab Segurança em APIs resetado!` });
+    } catch (err) { res.status(500).json({ sucesso: false, erro: err.message }); }
+});
+
 // Inicialização da porta dinâmica (Render ou Local)
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🔥 Servidor do Laboratório iniciado com sucesso na porta ${PORT}`));
