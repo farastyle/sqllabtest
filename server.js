@@ -5052,6 +5052,10 @@ const estiloApis = `
     .btn-reset  { background: #f3f0ff; color: #7C3AED; border: 1px solid #ede9fe; border-radius: 8px; padding: 9px; font-size: 12px; cursor: pointer; }
     .btn-logout { background: #fee2e2; color: #b91c1c; border-radius: 8px; padding: 9px; font-size: 12px; text-align: center; text-decoration: none; }
     .btn-hub    { background: #f1f5f9; color: #475569; border-radius: 8px; padding: 9px; font-size: 12px; text-align: center; text-decoration: none; }
+    .btn-guerra { display: block; text-align: center; padding: 9px; font-size: 12px; font-weight: 700; border-radius: 8px; text-decoration: none; transition: all .2s; }
+    .btn-guerra--locked { background: #1a1830; color: #4a4170; cursor: default; pointer-events: none; }
+    .btn-guerra--ativo  { background: #7C3AED; color: white; animation: glow-pulse 1.5s infinite; }
+    @keyframes glow-pulse { 0%,100%{box-shadow:0 0 0 0 #7c3aed55} 50%{box-shadow:0 0 0 6px #7c3aed00} }
     .main { flex: 1; padding: 32px 28px; max-width: 820px; }
     .main-header { margin-bottom: 28px; }
     .main-header h2 { font-size: 22px; color: #4C1D95; margin-bottom: 6px; }
@@ -5291,6 +5295,29 @@ const scriptApis = `
         } catch(err) { alert('❌ Erro: ' + err.message); }
     }
 
+    async function verificarSalaGuerra() {
+        try {
+            const r = await fetch('/apis/guerra/estado');
+            const res = await r.json();
+            const link = document.getElementById('link-guerra');
+            if (!link) return;
+            if (res.fase !== 'aguardando') {
+                link.classList.remove('btn-guerra--locked');
+                link.classList.add('btn-guerra--ativo');
+                link.removeAttribute('aria-disabled');
+                link.style.pointerEvents = '';
+                link.textContent = '⚔️ Entrar na Sala de Guerra!';
+            } else {
+                link.classList.add('btn-guerra--locked');
+                link.classList.remove('btn-guerra--ativo');
+                link.setAttribute('aria-disabled', 'true');
+                link.textContent = '⚔️ Sala de Guerra';
+            }
+        } catch(e) {}
+    }
+    verificarSalaGuerra();
+    setInterval(verificarSalaGuerra, 3000);
+
     carregarProgressoApis();
 `;
 
@@ -5446,6 +5473,7 @@ app.get('/apis/lab', exigirLoginApis, (req, res) => {
             <p class="surf-hint">Clique em um conceito para ler antes de responder.</p>
             ${renderSidebarApis()}
             <div class="sidebar-actions">
+                <a href="/apis/guerra" id="link-guerra" class="btn-guerra btn-guerra--locked" aria-disabled="true">⚔️ Sala de Guerra</a>
                 <button class="btn-reset" onclick="resetarApis()">🔄 Resetar Progresso</button>
                 <a href="/apis/logout" class="btn-logout">🚪 Sair</a>
                 <a href="/" class="btn-hub">← Voltar ao Hub</a>
