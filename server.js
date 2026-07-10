@@ -5301,7 +5301,7 @@ const scriptApis = `
             const res = await r.json();
             const link = document.getElementById('link-guerra');
             if (!link) return;
-            if (res.fase !== 'aguardando') {
+            if (res.fase === 'sala_aberta' || res.fase === 'votando' || res.fase === 'revelado' || res.fase === 'finalizado') {
                 link.classList.remove('btn-guerra--locked');
                 link.classList.add('btn-guerra--ativo');
                 link.removeAttribute('aria-disabled');
@@ -5670,7 +5670,7 @@ const QUESTOES_GUERRA = [
 ];
 
 let estadoGuerra = {
-    fase: 'aguardando',   // aguardando | votando | revelado | finalizado
+    fase: 'aguardando',   // aguardando | sala_aberta | votando | revelado | finalizado
     rodadaAtual: 0,       // 0 = não iniciado, 1–10 = rodada ativa
     votos: {},            // { aluno: 'A'|'B'|'C'|'D' } rodada atual
     historico: [],        // [{ rodada, correta, votos:{...}, pontosGanhos }]
@@ -5797,11 +5797,16 @@ app.get('/apis/guerra', exigirLoginApis, (req, res) => {
     const MEU_ALUNO = '${req.session.apisAluno}';
     let estadoAnterior = null;
 
-    function renderAguardando() {
-        document.getElementById('main-conteudo').innerHTML = \`
+    function renderAguardando(salaAberta) {
+        document.getElementById('main-conteudo').innerHTML = salaAberta ? \`
             <div class="aguardando">
-                <h2 class="pulse">⏳ Aguardando o professor iniciar o jogo...</h2>
-                <p>Quando a primeira rodada começar, a pergunta aparecerá aqui.</p>
+                <h2 class="pulse">✅ Você está na Sala de Guerra!</h2>
+                <p>Aguardando o professor iniciar a primeira rodada...</p>
+                <p style="margin-top:12px;font-size:12px;color:#4a4170;">Os outros colegas também precisam entrar antes de começar.</p>
+            </div>\` : \`
+            <div class="aguardando">
+                <h2 class="pulse">⏳ Aguardando o professor liberar a sala...</h2>
+                <p>Fique nessa tela. O jogo começará em breve.</p>
             </div>\`;
     }
 
@@ -5905,7 +5910,8 @@ app.get('/apis/guerra', exigirLoginApis, (req, res) => {
         const faseAnt = estadoAnterior ? estadoAnterior.fase : null;
         const rodAnt  = estadoAnterior ? estadoAnterior.rodadaAtual : null;
 
-        if (estado.fase === 'aguardando') { renderAguardando(); }
+        if (estado.fase === 'aguardando') { renderAguardando(false); }
+        else if (estado.fase === 'sala_aberta') { if (faseAnt !== 'sala_aberta') renderAguardando(true); }
         else if (estado.fase === 'votando') {
             if (faseAnt !== 'votando' || rodAnt !== estado.rodadaAtual) { renderVotando(estado); }
             else {
@@ -5985,6 +5991,7 @@ app.get('/apis/guerra/painel', (req, res) => {
         .controles { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:24px; }
         .btn { padding:12px 22px; border:none; border-radius:10px; font-size:14px; font-weight:700; cursor:pointer; transition:opacity .15s; }
         .btn:hover { opacity:.85; }
+        .btn-liberar  { background:#0891B2; color:white; }
         .btn-iniciar  { background:#7C3AED; color:white; }
         .btn-revelar  { background:#f59e0b; color:white; }
         .btn-proximo  { background:#22c55e; color:#052e16; }
@@ -6016,7 +6023,8 @@ app.get('/apis/guerra/painel', (req, res) => {
     <div class="sub">Segurança em APIs · Aula 18 · Polling a cada 2s</div>
 
     <div class="controles">
-        <button class="btn btn-iniciar"  id="btn-ini"  onclick="controle('iniciar')">▶ Iniciar Jogo</button>
+        <button class="btn btn-liberar"  id="btn-lib"  onclick="controle('liberar')">🔓 Liberar Sala</button>
+        <button class="btn btn-iniciar"  id="btn-ini"  onclick="controle('iniciar')" disabled>▶ Iniciar Rodada 1</button>
         <button class="btn btn-revelar"  id="btn-rev"  onclick="controle('revelar')" disabled>👁 Revelar Resposta</button>
         <button class="btn btn-proximo"  id="btn-prox" onclick="controle('proximo')" disabled>⏭ Próxima Rodada</button>
         <button class="btn btn-reset"    id="btn-rst"  onclick="controle('reset')">🔄 Resetar Jogo</button>
@@ -6067,7 +6075,8 @@ app.get('/apis/guerra/painel', (req, res) => {
     }
 
     function atualizarBotoes(fase) {
-        document.getElementById('btn-ini').disabled  = fase !== 'aguardando' && fase !== 'finalizado';
+        document.getElementById('btn-lib').disabled  = fase !== 'aguardando' && fase !== 'finalizado';
+        document.getElementById('btn-ini').disabled  = fase !== 'sala_aberta';
         document.getElementById('btn-rev').disabled  = fase !== 'votando';
         document.getElementById('btn-prox').disabled = fase !== 'revelado';
         document.getElementById('btn-rst').disabled  = false;
@@ -6145,9 +6154,19 @@ app.post('/apis/guerra/controle', (req, res) => {
         return res.json({ ok: true });
     }
 
-    if (acao === 'iniciar') {
+    if (acao === 'liberar') {
         if (estadoGuerra.fase === 'aguardando' || estadoGuerra.fase === 'finalizado') {
-            estadoGuerra = { fase:'votando', rodadaAtual:1, votos:{}, historico:[], pontosTime:0, acertosPorAluno:{}, iniciadoEm: Date.now() };
+            estadoGuerra = { fase:'sala_aberta', rodadaAtual:0, votos:{}, historico:[], pontosTime:0, acertosPorAluno:{}, iniciadoEm:null };
+            return res.json({ ok: true });
+        }
+    }
+
+    if (acao === 'iniciar') {
+        if (estadoGuerra.fase === 'sala_aberta') {
+            estadoGuerra.fase = 'votando';
+            estadoGuerra.rodadaAtual = 1;
+            estadoGuerra.votos = {};
+            estadoGuerra.iniciadoEm = Date.now();
             return res.json({ ok: true });
         }
     }
