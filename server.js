@@ -5596,6 +5596,27 @@ app.post('/apis/lab/reset', exigirLoginApis, async (req, res) => {
 // SALA DE GUERRA — Jogo colaborativo em tempo real (Aula 18)
 // =====================================
 
+// Espalha as peças corretas e as armadilhas para que não fiquem agrupadas.
+// Antes, as corretas eram sempre as 6 primeiras (a–f) e as armadilhas as 6
+// últimas (g–l), então ficavam sempre no mesmo lado da grade — fácil demais.
+// Agora intercala de forma determinística (variando início/rotação por rodada)
+// e reatribui os rótulos a, b, c... na ordem visual final.
+function misturarPecas(pecas, seed) {
+    const corretas   = pecas.filter(p => p.correta);
+    const armadilhas = pecas.filter(p => !p.correta);
+    const comecaCorreta = seed % 2 === 0;
+    const rot = armadilhas.length ? seed % armadilhas.length : 0;
+    const armRot = armadilhas.slice(rot).concat(armadilhas.slice(0, rot));
+    const a = comecaCorreta ? corretas : armRot;
+    const b = comecaCorreta ? armRot : corretas;
+    const out = [];
+    for (let i = 0; i < Math.max(a.length, b.length); i++) {
+        if (a[i]) out.push(a[i]);
+        if (b[i]) out.push(b[i]);
+    }
+    return out.map((p, i) => ({ ...p, id: String.fromCharCode(97 + i) }));
+}
+
 const PUZZLES_GUERRA = [
     {
         id: 'p1',
@@ -5616,7 +5637,7 @@ const PUZZLES_GUERRA = [
             { id:'k', texto: 'Mensagens de erro detalham qual campo falhou e mostram o valor recebido',      correta: false },
             { id:'l', texto: 'DELETE /api/admin/usuarios/{id} aceita qualquer token JWT válido',             correta: false },
         ],
-        explicacao: 'As 6 medidas corretas protegem contra API1 (verificar ownership), API2 (JWT com exp), API3 (sem exposição), API4 (rate limiting + HTTPS) e API8 (logs). As armadilhas a-g são falhas clássicas do OWASP API Top 10.',
+        explicacao: 'As 6 medidas corretas protegem contra API1 (verificar ownership), API2 (JWT com exp), API3 (sem exposição), API4 (rate limiting + HTTPS) e API8 (logs). As demais peças são falhas clássicas do OWASP API Top 10.',
         metaAcertos: 4,
     },
     {
@@ -5707,7 +5728,7 @@ const PUZZLES_GUERRA = [
         explicacao: 'Corretas atacam API9 (inventory), API10 (unsafe API consumption) e a falta de auth interna (zero trust). As armadilhas representam o pensamento "perímetro = segurança" que é falho em microsserviços.',
         metaAcertos: 4,
     },
-];
+].map((p, i) => ({ ...p, pecas: misturarPecas(p.pecas, i + 1) }));
 
 let estadoGuerra = {
     fase: 'aguardando',   // aguardando | sala_aberta | escolhendo | revelado | finalizado
@@ -6288,6 +6309,1173 @@ app.post('/apis/guerra/controle', (req, res) => {
     }
 
     res.json({ ok: false, erro: 'Ação desconhecida' });
+});
+
+// =====================================================================
+// LAB AUTENTICAÇÃO E TOKENS (Aula 19) — /tokens
+// =====================================================================
+
+const ALUNOS_TOKENS = ALUNOS_APIS;          // mesma turma
+const CREDENCIAIS_TOKENS = CREDENCIAIS_APIS;
+
+function exigirLoginTokens(req, res, next) {
+    if (req.session.tokensAluno) return next();
+    res.redirect('/tokens');
+}
+
+function normalizarTokens(r) {
+    return String(r || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+}
+
+const CONCEITOS_TOKENS = [
+    { icone: '🔑', nome: 'O que é um token', conteudo: 'Depois do login, o servidor entrega um <b>token</b> que o cliente reenvia em cada requisição no header <code>Authorization: Bearer &lt;token&gt;</code>. Diferente da sessão tradicional (guardada no servidor), o JWT é <b>stateless</b>: o próprio token carrega os dados e é validado pela assinatura.' },
+    { icone: '🧩', nome: 'Anatomia do JWT', conteudo: 'Um JWT tem 3 partes separadas por ponto: <code>header.payload.signature</code>. Header e payload são apenas <b>Base64url</b> — <b>qualquer um lê</b> (não é criptografia!). Só a <b>assinatura</b> impede adulteração: ela usa um segredo/chave que só o servidor conhece.' },
+    { icone: '⏰', nome: 'Ciclo de vida', conteudo: 'O <b>access token</b> deve durar pouco (5–15 min). O <b>refresh token</b> dura mais e serve para obter novos access tokens — idealmente com <b>rotação</b> a cada uso. Todo token deve ter <code>exp</code> e poder ser <b>revogado</b> (logout, troca de senha, vazamento).' },
+    { icone: '🚪', nome: 'OAuth 2.0 e OIDC', conteudo: 'OAuth 2.0 é sobre <b>autorização delegada</b> (dar acesso sem entregar a senha). Para SPA/mobile use <b>Authorization Code + PKCE</b>. Evite o <b>Implicit Grant</b> (token na URL). O parâmetro <code>state</code> protege contra CSRF e o <code>redirect_uri</code> deve ser validado contra uma allowlist.' },
+    { icone: '💥', nome: 'Falhas clássicas', conteudo: 'As mais exploradas: <code>alg:none</code> (aceitar token sem assinatura), <b>algorithm confusion</b> (RS256→HS256 usando a chave pública como segredo), <b>segredo fraco</b> (brute force do HMAC), token <b>sem exp</b>, refresh token em <code>localStorage</code> e ausência de <b>revogação</b>.' },
+];
+
+const CODEST = 'background:#eef2ff;padding:2px 6px;border-radius:4px;font-size:12px;color:#4338CA;';
+
+const CONTEUDO_TOKENS = [
+    { id: 't1', fase: 'jwt', tipo: 'input', titulo: '🧩 O payload não é secreto',
+      enunciado: 'Este é o payload (2ª parte) de um JWT real. Ele é só Base64url — decodifique (em <code>jwt.io</code> ou com <code>atob()</code>) e responda:<br><br><code style="' + CODEST + 'word-break:break-all;">eyJzdWIiOiIxMDAxIiwibmFtZSI6Ik1hcmlhIFNpbHZhIiwicm9sZSI6InVzZXIiLCJleHAiOjE3MjAwMDAwMDB9</code><br><br>Qual é o valor da claim <code>role</code>?',
+      placeholder: 'ex: user', respostas: ['user'],
+      dica: 'Base64 não é criptografia — o payload é legível por qualquer um que capture o token. Nunca coloque dados sensíveis nele.' },
+
+    { id: 't2', fase: 'jwt', tipo: 'single', titulo: '🖋️ Quem garante a integridade?',
+      enunciado: 'Um JWT tem header, payload e assinatura. Qual dessas partes o servidor verifica para saber que o token <b>não foi adulterado</b>?',
+      opcoes: [
+        { id: 'a', texto: 'O header', correta: false },
+        { id: 'b', texto: 'O payload', correta: false },
+        { id: 'c', texto: 'A assinatura (signature)', correta: true },
+        { id: 'd', texto: 'Nenhuma — o JWT não protege contra adulteração', correta: false },
+      ] },
+
+    { id: 't3', fase: 'jwt', tipo: 'single', titulo: '🚫 O header suspeito',
+      enunciado: 'Um atacante troca o header do token por este e apaga a assinatura:<br><br><code style="' + CODEST + '">{ "alg": "none", "typ": "JWT" }</code><br><br>Se o servidor aceitar, qual é a falha?',
+      opcoes: [
+        { id: 'a', texto: 'O token passa a expirar mais rápido', correta: false },
+        { id: 'b', texto: 'O servidor confia no token sem checar a assinatura (alg:none) — dá para forjar qualquer token', correta: true },
+        { id: 'c', texto: 'O payload passa a ser criptografado', correta: false },
+        { id: 'd', texto: 'Nada muda, continua seguro', correta: false },
+      ],
+      dica: 'A validação deve fixar o algoritmo esperado e rejeitar explicitamente "none".' },
+
+    { id: 't4', fase: 'jwt', tipo: 'single', titulo: '🔀 Confusão de algoritmo',
+      enunciado: 'A API valida tokens tanto com RS256 (par de chaves) quanto HS256 (segredo), <b>sem fixar</b> qual usar. O atacante assina um token com HS256 usando a <b>chave pública</b> (que é conhecida) como se fosse o segredo. Como se chama esse ataque?',
+      opcoes: [
+        { id: 'a', texto: 'Algorithm confusion (RS256 → HS256)', correta: true },
+        { id: 'b', texto: 'SQL Injection', correta: false },
+        { id: 'c', texto: 'Brute force de expiração', correta: false },
+        { id: 'd', texto: 'Cross-Site Scripting', correta: false },
+      ] },
+
+    { id: 't5', fase: 'jwt', tipo: 'input', titulo: '🔢 Contando as claims',
+      enunciado: 'Decodifique este payload e conte quantas claims (campos) ele contém:<br><br><code style="' + CODEST + 'word-break:break-all;">eyJzdWIiOiI0MiIsImVtYWlsIjoiam9hb0Bsb2phLmNvbSIsInJvbGUiOiJ1c2VyIiwicGxhbm8iOiJwcmVtaXVtIiwiaWF0IjoxNzE5OTAwMDAwLCJleHAiOjE3MTk5MDM2MDB9</code><br><br>Quantas claims?',
+      placeholder: 'Digite o número', respostas: ['6'] },
+
+    { id: 't6', fase: 'oauth', tipo: 'single', titulo: '🚪 Fluxo OAuth para SPA/mobile',
+      enunciado: 'Qual fluxo do OAuth 2.0 é o <b>recomendado hoje</b> para aplicações SPA e mobile (clientes públicos, que não guardam segredo com segurança)?',
+      opcoes: [
+        { id: 'a', texto: 'Authorization Code + PKCE', correta: true },
+        { id: 'b', texto: 'Implicit Grant (token direto na URL)', correta: false },
+        { id: 'c', texto: 'Resource Owner Password Credentials (usuário e senha direto)', correta: false },
+        { id: 'd', texto: 'Client Credentials', correta: false },
+      ],
+      dica: 'O Implicit Grant foi desencorajado justamente por expor o token na URL.' },
+
+    { id: 't7', fase: 'defesa', tipo: 'multi', titulo: '🗄️ Guardando e transportando o token',
+      enunciado: 'Marque <b>todas</b> as boas práticas de armazenamento e transporte de tokens no cliente.',
+      opcoes: [
+        { id: 'a', texto: 'Enviar o token no header Authorization: Bearer', correta: true },
+        { id: 'b', texto: 'Guardar o refresh token em cookie HttpOnly + Secure + SameSite', correta: true },
+        { id: 'c', texto: 'Salvar o access token em localStorage "para durar entre sessões"', correta: false },
+        { id: 'd', texto: 'Exigir HTTPS em todas as chamadas que levam o token', correta: true },
+        { id: 'e', texto: 'Passar o JWT como parâmetro na URL (?token=...)', correta: false },
+        { id: 'f', texto: 'Usar access token com expiração curta', correta: true },
+      ] },
+
+    { id: 't8', fase: 'defesa', tipo: 'single', titulo: '♾️ O token sem prazo',
+      enunciado: 'Um JWT foi emitido <b>sem</b> a claim <code>exp</code>. Qual é o principal risco?',
+      opcoes: [
+        { id: 'a', texto: 'Se o token vazar, ele vale para sempre — não há como expirar', correta: true },
+        { id: 'b', texto: 'O token fica grande demais para trafegar', correta: false },
+        { id: 'c', texto: 'O usuário não consegue fazer login', correta: false },
+        { id: 'd', texto: 'O payload fica ilegível', correta: false },
+      ] },
+
+    { id: 't9', fase: 'defesa', tipo: 'multi', titulo: '🛡️ Blindando o login',
+      enunciado: 'Um pentest encontrou o login sem proteções. Marque <b>todas</b> as defesas que devem ser aplicadas à autenticação.',
+      opcoes: [
+        { id: 'a', texto: 'Rate limiting / bloqueio progressivo após várias falhas', correta: true },
+        { id: 'b', texto: 'Revogar refresh tokens no logout e na troca de senha', correta: true },
+        { id: 'c', texto: 'Responder "usuário não existe" x "senha incorreta" para orientar o usuário', correta: false },
+        { id: 'd', texto: 'Exigir reautenticação (2FA/senha) em operações sensíveis', correta: true },
+        { id: 'e', texto: 'Aceitar o mesmo refresh token infinitas vezes', correta: false },
+        { id: 'f', texto: 'Rotacionar o refresh token a cada uso', correta: true },
+      ] },
+
+    { id: 't10', fase: 'defesa', tipo: 'single', titulo: '⛔ Cortando um token vazado',
+      enunciado: 'Um access token de 15 minutos vazou. Qual mecanismo faz ele parar de funcionar <b>imediatamente</b>, antes dos 15 minutos?',
+      opcoes: [
+        { id: 'a', texto: 'Uma lista de revogação (denylist) consultada nas requisições críticas', correta: true },
+        { id: 'b', texto: 'Aumentar o exp do token', correta: false },
+        { id: 'c', texto: 'Trocar a porta do servidor', correta: false },
+        { id: 'd', texto: 'Renomear a claim role', correta: false },
+      ] },
+];
+
+function renderSidebarTokens() {
+    return CONCEITOS_TOKENS.map((c, i) => `
+        <div class="surf-category">
+            <div class="surf-cat-header" onclick="toggleConceitoTk(${i})">
+                <span class="surf-icon">${c.icone}</span>
+                <span class="surf-cat-name">${c.nome}</span>
+                <span class="surf-cat-arrow" id="tkarrow-${i}">▶</span>
+            </div>
+            <div class="surf-cat-body" id="tkconceito-${i}">${c.conteudo}</div>
+        </div>`).join('');
+}
+
+function renderCardTokens(ex, i) {
+    const badges = {
+        jwt:    { txt: 'JWT',    bg: '#eef2ff', cor: '#4338CA' },
+        oauth:  { txt: 'OAuth',  bg: '#e0f2fe', cor: '#0369a1' },
+        defesa: { txt: 'Defesa', bg: '#dcfce7', cor: '#15803d' },
+    };
+    const b = badges[ex.fase] || badges.jwt;
+    let corpo = '';
+    if (ex.tipo === 'input') {
+        corpo = `<input type="text" id="inp-${ex.id}" class="input-resposta" placeholder="${ex.placeholder || 'Sua resposta'}" autocomplete="off">`;
+    } else if (ex.tipo === 'single') {
+        corpo = `<div class="opcoes-lista">` + ex.opcoes.map(o => `
+            <label class="opcao-item"><input type="radio" name="opt-${ex.id}" value="${o.id}"><span>${o.texto}</span></label>`).join('') + `</div>`;
+    } else if (ex.tipo === 'multi') {
+        corpo = `<div class="opcoes-lista"><p class="multi-hint">☑️ Marque todas as corretas.</p>` + ex.opcoes.map(o => `
+            <label class="opcao-item"><input type="checkbox" name="opt-${ex.id}" value="${o.id}"><span>${o.texto}</span></label>`).join('') + `</div>`;
+    }
+    return `
+    <div class="exercise-card" id="card-${ex.id}">
+        <div class="card-header">
+            <span class="card-badge" style="background:${b.bg};color:${b.cor};">${b.txt}</span>
+            <span class="card-num">Exercício ${i + 1}/${CONTEUDO_TOKENS.length}</span>
+        </div>
+        <h3>${ex.titulo}</h3>
+        <div class="card-enunciado">${ex.enunciado}</div>
+        ${corpo}
+        ${ex.dica ? `<div class="dica-tk">💡 ${ex.dica}</div>` : ''}
+        <button class="btn-validar" onclick="validarTokens('${ex.id}','${ex.tipo}')">🚀 Validar</button>
+        <div class="feedback" id="fb-${ex.id}"></div>
+    </div>`;
+}
+
+function renderExerciciosTokens() {
+    return CONTEUDO_TOKENS.map((ex, i) => renderCardTokens(ex, i)).join('');
+}
+
+const estiloTokens = `
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'IBM Plex Sans', system-ui, sans-serif; background: #f1f5ff; color: #0f172a; }
+    .container { display: flex; min-height: 100vh; }
+    .sidebar { width: 280px; min-height: 100vh; background: #fff; border-right: 1px solid #e0e7ff; padding: 24px 16px; position: sticky; top: 0; overflow-y: auto; max-height: 100vh; flex-shrink: 0; }
+    .sidebar-brand h2 { font-size: 15px; color: #3730A3; margin-bottom: 4px; }
+    .sidebar-brand p  { font-size: 12px; color: #4F46E5; }
+    .contador-box { background: #eef2ff; border-radius: 8px; padding: 10px 14px; margin: 14px 0; }
+    .contador-box p { font-size: 13px; font-weight: 700; color: #4338CA; }
+    .surf-section-title { font-size: 10px; font-weight: 700; color: #94A3B8; text-transform: uppercase; letter-spacing: .08em; margin: 16px 0 8px; }
+    .surf-hint { font-size: 11px; color: #94A3B8; margin-bottom: 10px; }
+    .surf-category { border: 1px solid #e0e7ff; border-radius: 8px; margin-bottom: 8px; overflow: hidden; }
+    .surf-cat-header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; cursor: pointer; background: #f8faff; }
+    .surf-icon { font-size: 16px; }
+    .surf-cat-name { flex: 1; font-size: 12px; font-weight: 600; color: #3730A3; }
+    .surf-cat-arrow { font-size: 10px; color: #4F46E5; transition: transform .2s; }
+    .surf-cat-body { display: none; padding: 10px 12px; font-size: 12px; line-height: 1.6; color: #374151; background: #fff; border-top: 1px solid #e0e7ff; }
+    .surf-cat-body code { background: #eef2ff; padding: 1px 5px; border-radius: 3px; font-size: 11px; color: #4338CA; }
+    .sidebar-actions { margin-top: 20px; display: flex; flex-direction: column; gap: 8px; }
+    .btn-reset  { background: #eef2ff; color: #4338CA; border: 1px solid #e0e7ff; border-radius: 8px; padding: 9px; font-size: 12px; cursor: pointer; }
+    .btn-logout { background: #fee2e2; color: #b91c1c; border-radius: 8px; padding: 9px; font-size: 12px; text-align: center; text-decoration: none; }
+    .btn-hub    { background: #f1f5f9; color: #475569; border-radius: 8px; padding: 9px; font-size: 12px; text-align: center; text-decoration: none; }
+    .btn-guerra { display: block; text-align: center; padding: 9px; font-size: 12px; font-weight: 700; border-radius: 8px; text-decoration: none; transition: all .2s; }
+    .btn-guerra--locked { background: #0b1220; color: #3b4a63; cursor: default; pointer-events: none; }
+    .btn-guerra--ativo  { background: #0EA5E9; color: white; animation: glow-pulse-tk 1.5s infinite; }
+    @keyframes glow-pulse-tk { 0%,100%{box-shadow:0 0 0 0 #0ea5e955} 50%{box-shadow:0 0 0 6px #0ea5e900} }
+    .main { flex: 1; padding: 32px 28px; max-width: 820px; }
+    .main-header { margin-bottom: 28px; }
+    .main-header h2 { font-size: 22px; color: #3730A3; margin-bottom: 6px; }
+    .main-header p  { font-size: 13px; color: #4F46E5; }
+    .exercise-card { background: #fff; border: 1px solid #e0e7ff; border-radius: 14px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(67,56,202,.07); }
+    .exercise-card.concluido { border-color: #16a34a; background: #f0fdf4; }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .card-badge { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
+    .card-num   { font-size: 11px; color: #94A3B8; }
+    .exercise-card h3 { font-size: 16px; color: #0f172a; margin-bottom: 10px; }
+    .card-enunciado { font-size: 13px; color: #374151; line-height: 1.7; margin-bottom: 16px; }
+    .input-resposta { width: 100%; border: 1px solid #a5b4fc; border-radius: 8px; padding: 10px 14px; font-size: 14px; outline: none; margin-bottom: 12px; }
+    .input-resposta:focus { border-color: #4338CA; box-shadow: 0 0 0 3px #4338ca20; }
+    .opcoes-lista { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+    .multi-hint { font-size: 11px; color: #64748b; margin-bottom: 2px; }
+    .opcao-item { display: flex; align-items: flex-start; gap: 10px; background: #f8faff; border: 1px solid #e0e7ff; border-radius: 10px; padding: 11px 14px; font-size: 13px; color: #334155; cursor: pointer; transition: all .15s; line-height: 1.5; }
+    .opcao-item:hover { border-color: #a5b4fc; background: #eef2ff; }
+    .opcao-item input { margin-top: 2px; flex-shrink: 0; accent-color: #4338CA; width: 16px; height: 16px; }
+    .dica-tk { background: #eff6ff; border-left: 3px solid #0EA5E9; border-radius: 0 8px 8px 0; padding: 9px 13px; font-size: 12px; color: #0369a1; line-height: 1.5; margin-bottom: 12px; }
+    .btn-validar { background: #4338CA; color: white; border: none; border-radius: 8px; padding: 10px 22px; font-size: 13px; font-weight: 600; cursor: pointer; margin-bottom: 10px; }
+    .btn-validar:hover { opacity: .88; }
+    .feedback { font-size: 13px; font-weight: 600; min-height: 20px; }
+`;
+
+const scriptTokens = `
+    function toggleConceitoTk(i){
+        var b=document.getElementById('tkconceito-'+i);
+        var a=document.getElementById('tkarrow-'+i);
+        if(b.style.display==='block'){ b.style.display='none'; a.style.transform=''; }
+        else { b.style.display='block'; a.style.transform='rotate(90deg)'; }
+    }
+    function atualizarContadorTokens(){
+        var done=document.querySelectorAll('.exercise-card.concluido').length;
+        var el=document.getElementById('contador-progresso');
+        if(el) el.textContent = done + ' / ${CONTEUDO_TOKENS.length} concluídos';
+    }
+    async function carregarProgressoTokens(){
+        try{
+            var r=await fetch('/tokens/lab/progresso');
+            var d=await r.json();
+            (d.concluidos||[]).forEach(function(id){
+                var c=document.getElementById('card-'+id);
+                if(c) c.classList.add('concluido');
+            });
+            atualizarContadorTokens();
+        }catch(e){}
+    }
+    async function validarTokens(exId, tipo){
+        var fb=document.getElementById('fb-'+exId);
+        var card=document.getElementById('card-'+exId);
+        var body={ exercicioId: exId, tipo: tipo };
+        if(tipo==='input'){
+            body.resposta=(document.getElementById('inp-'+exId).value || '');
+        } else if(tipo==='single'){
+            var sel=document.querySelector('input[name=opt-'+exId+']:checked');
+            if(!sel){ fb.textContent='⚠️ Selecione uma opção.'; fb.style.color='#b45309'; return; }
+            body.resposta=sel.value;
+        } else if(tipo==='multi'){
+            var marc=document.querySelectorAll('input[name=opt-'+exId+']:checked');
+            body.selecionados=Array.prototype.map.call(marc, function(c){ return c.value; });
+        }
+        try{
+            var r=await fetch('/tokens/lab/validar',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+            var d=await r.json();
+            if(d.correto){
+                fb.textContent='✅ Correto!'; fb.style.color='#16a34a';
+                if(card) card.classList.add('concluido');
+                atualizarContadorTokens();
+            } else if(tipo==='multi' && d.total){
+                fb.textContent='❌ '+d.acertos+'/'+d.total+' corretos. Revise as marcações e tente de novo.'; fb.style.color='#dc2626';
+            } else {
+                fb.textContent='❌ Não foi dessa vez. Revise o conceito e tente de novo.'; fb.style.color='#dc2626';
+            }
+        }catch(e){ fb.textContent='⚠️ Erro de conexão.'; fb.style.color='#b45309'; }
+    }
+    async function resetarTokens(){
+        if(!confirm('Resetar todo o seu progresso neste laboratório?')) return;
+        try{
+            await fetch('/tokens/lab/reset',{ method:'POST' });
+            document.querySelectorAll('.exercise-card.concluido').forEach(function(c){ c.classList.remove('concluido'); });
+            document.querySelectorAll('.feedback').forEach(function(f){ f.textContent=''; });
+            atualizarContadorTokens();
+        }catch(e){}
+    }
+    async function verificarSalaGuerraTk(){
+        try{
+            var r=await fetch('/tokens/guerra/estado');
+            if(!r.ok) return;
+            var e=await r.json();
+            var link=document.getElementById('link-guerra');
+            if(!link) return;
+            if(e.fase && e.fase !== 'aguardando'){
+                link.classList.remove('btn-guerra--locked');
+                link.classList.add('btn-guerra--ativo');
+                link.removeAttribute('aria-disabled');
+                link.textContent='🎯 Entrar na Operação Token!';
+            } else {
+                link.classList.add('btn-guerra--locked');
+                link.classList.remove('btn-guerra--ativo');
+                link.setAttribute('aria-disabled','true');
+                link.textContent='🎯 Operação Token';
+            }
+        }catch(e){}
+    }
+    carregarProgressoTokens();
+    verificarSalaGuerraTk();
+    setInterval(verificarSalaGuerraTk, 3000);
+`;
+
+app.get('/tokens', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'tokens-login.html'));
+});
+
+app.post('/tokens/login', (req, res) => {
+    const usuario = String(req.body.usuario || '').trim().toLowerCase();
+    const senha   = String(req.body.senha   || '').trim();
+    const conta   = CREDENCIAIS_TOKENS[usuario];
+    if (!conta || conta.senha !== senha) return res.redirect('/tokens?erro=1');
+    req.session.tokensAluno = usuario;
+    req.session.tokensNome  = conta.nomeExibicao;
+    res.redirect('/tokens/lab');
+});
+
+app.get('/tokens/logout', (req, res) => {
+    req.session.tokensAluno = null;
+    req.session.tokensNome  = null;
+    res.redirect('/tokens');
+});
+
+app.get('/tokens/lab', exigirLoginTokens, (req, res) => {
+    const nome = req.session.tokensNome;
+    res.send(`<!DOCTYPE html><html lang="pt-BR"><head>
+        <meta charset="UTF-8">
+        <title>Autenticação e Tokens — ${escapeHtml(nome)}</title>
+        <style>${estiloTokens}</style>
+    </head><body>
+    <div class="container">
+        <div class="sidebar">
+            <div class="sidebar-brand">
+                <h2>🔑 Autenticação e Tokens</h2>
+                <p>Olá, <strong>${escapeHtml(nome)}</strong></p>
+            </div>
+            <div class="contador-box">
+                <p id="contador-progresso">0 / ${CONTEUDO_TOKENS.length} concluídos</p>
+            </div>
+            <div class="surf-section-title">Conceitos</div>
+            <p class="surf-hint">Clique em um conceito para ler antes de responder.</p>
+            ${renderSidebarTokens()}
+            <div class="sidebar-actions">
+                <a href="/tokens/guerra" id="link-guerra" class="btn-guerra btn-guerra--locked" aria-disabled="true">🎯 Operação Token</a>
+                <button class="btn-reset" onclick="resetarTokens()">🔄 Resetar Progresso</button>
+                <a href="/tokens/logout" class="btn-logout">🚪 Sair</a>
+                <a href="/" class="btn-hub">← Voltar ao Hub</a>
+            </div>
+        </div>
+        <div class="main">
+            <div class="main-header">
+                <h2>🔑 Autenticação e Tokens</h2>
+                <p>JWT, OAuth e as falhas mais comuns em autenticação baseada em tokens.</p>
+            </div>
+            ${renderExerciciosTokens()}
+        </div>
+    </div>
+    <script>${scriptTokens}</script>
+    </body></html>`);
+});
+
+app.get('/tokens/lab/progresso', exigirLoginTokens, async (req, res) => {
+    const aluno = req.session.tokensAluno;
+    try {
+        const r = await pool.query('SELECT exercicio_id FROM tokens_progresso WHERE aluno=$1', [aluno]);
+        res.json({ concluidos: r.rows.map(row => row.exercicio_id) });
+    } catch (err) { res.status(500).json({ erro: err.message }); }
+});
+
+app.post('/tokens/lab/validar', exigirLoginTokens, async (req, res) => {
+    const aluno = req.session.tokensAluno;
+    const { exercicioId, resposta, selecionados } = req.body;
+    const ex = CONTEUDO_TOKENS.find(e => e.id === exercicioId);
+    if (!ex) return res.status(400).json({ correto: false, erro: 'Exercício desconhecido' });
+
+    let correto = false, acertos = 0, total = 0, erros = [];
+
+    if (ex.tipo === 'input') {
+        const norm = normalizarTokens(resposta);
+        correto = ex.respostas.some(v => normalizarTokens(v) === norm);
+    } else if (ex.tipo === 'single') {
+        const c = ex.opcoes.find(o => o.correta);
+        correto = !!c && resposta === c.id;
+    } else if (ex.tipo === 'multi') {
+        const sel = new Set(Array.isArray(selecionados) ? selecionados : []);
+        total = ex.opcoes.length;
+        ex.opcoes.forEach(o => {
+            const marcada = sel.has(o.id);
+            if (marcada === !!o.correta) acertos++;
+            else erros.push(o.id);
+        });
+        correto = acertos === total;
+    }
+
+    if (correto) {
+        try {
+            await pool.query(
+                'INSERT INTO tokens_progresso (aluno, exercicio_id) VALUES ($1,$2) ON CONFLICT (aluno, exercicio_id) DO UPDATE SET concluido_em = NOW()',
+                [aluno, exercicioId]
+            );
+        } catch (err) { console.error('Erro progresso Tokens:', err.message); }
+    }
+
+    res.json(ex.tipo === 'multi' ? { correto, acertos, total, erros } : { correto });
+});
+
+app.post('/tokens/lab/reset', exigirLoginTokens, async (req, res) => {
+    const aluno = req.session.tokensAluno;
+    try {
+        await pool.query('DELETE FROM tokens_progresso WHERE aluno=$1', [aluno]);
+        res.json({ sucesso: true });
+    } catch (err) { res.status(500).json({ sucesso: false, erro: err.message }); }
+});
+
+app.get('/tokens/painel-professor/dados', async (req, res) => {
+    try {
+        const r = await pool.query('SELECT aluno, exercicio_id FROM tokens_progresso');
+        const dados = {};
+        r.rows.forEach(row => { dados[row.aluno + ':' + row.exercicio_id] = true; });
+        res.json({ dados, alunos: ALUNOS_TOKENS.map(a => ({ u: a.usuario, n: a.nomeExibicao })), exercicios: CONTEUDO_TOKENS.map(e => e.id) });
+    } catch (err) { res.status(500).json({ erro: err.message }); }
+});
+
+app.get('/tokens/painel-professor', (req, res) => {
+    res.send(`<!DOCTYPE html><html lang="pt-BR"><head>
+    <meta charset="UTF-8"><title>Painel Professor — Autenticação e Tokens</title>
+    <style>
+        * { box-sizing:border-box; margin:0; padding:0; }
+        body { font-family:system-ui,sans-serif; background:#f1f5ff; color:#0f172a; padding:28px; }
+        h1 { color:#3730A3; margin-bottom:4px; font-size:22px; }
+        .sub { color:#64748b; font-size:13px; margin-bottom:20px; }
+        table { border-collapse:collapse; background:#fff; }
+        th,td { border:1px solid #c7d2fe; text-align:center; font-size:13px; }
+        th { background:#4338CA; color:#fff; padding:6px 5px; font-size:11px; }
+        td { padding:8px 6px; }
+        td.nome { text-align:left; font-weight:600; padding:8px 12px; white-space:nowrap; }
+        td.total { font-weight:800; color:#4338CA; }
+        .ok { background:#f0fdf4; } .no { background:#fafafa; }
+        #status { font-size:11px; color:#64748b; margin-top:12px; }
+        a.voltar { color:#4F46E5; font-size:12px; text-decoration:none; }
+    </style></head><body>
+    <h1>🔑 Painel do Professor — Autenticação e Tokens</h1>
+    <div class="sub">Aula 19 · atualiza a cada 3s · <a class="voltar" href="/tokens/guerra/painel">→ Painel da Operação Token</a></div>
+    <div id="tabela">Carregando...</div>
+    <div id="status">🟡 Aguardando...</div>
+    <script>
+    async function poll(){
+        try{
+            var r=await fetch('/tokens/painel-professor/dados');
+            var d=await r.json();
+            var ex=d.exercicios, al=d.alunos, dados=d.dados;
+            var h='<table><tr><th>Aluno</th>';
+            ex.forEach(function(e){ h+='<th>'+e.replace('t','')+'</th>'; });
+            h+='<th>Total</th></tr>';
+            al.forEach(function(a){
+                var tot=0;
+                var linha='<td class="nome">'+a.n+'</td>';
+                ex.forEach(function(e){
+                    var feito=dados[a.u+':'+e];
+                    if(feito) tot++;
+                    linha+='<td class="'+(feito?'ok':'no')+'">'+(feito?'✅':'⬜')+'</td>';
+                });
+                h+='<tr>'+linha+'<td class="total">'+tot+'/'+ex.length+'</td></tr>';
+            });
+            h+='</table>';
+            document.getElementById('tabela').innerHTML=h;
+            document.getElementById('status').textContent='🟢 Atualizado: '+new Date().toLocaleTimeString('pt-BR');
+        }catch(e){ document.getElementById('status').textContent='🔴 Falha: '+e.message; }
+    }
+    poll(); setInterval(poll,3000);
+    </script></body></html>`);
+});
+
+// =====================================================================
+// OPERAÇÃO TOKEN — Sala de Guerra do lab de Autenticação (Aula 19)
+// Rodadas alternam entre ATAQUE (achar as falhas reais) e DEFESA (achar
+// as proteções corretas). Como a resposta certa muda de natureza a cada
+// rodada, não dá para decorar "seguro = certo". As cartas são embaralhadas
+// por misturarPecas() para não ficarem agrupadas.
+// =====================================================================
+
+const PUZZLES_TOKENS = [
+    {
+        id: 'op1', modo: 'ataque', titulo: 'Token Interceptado',
+        cenario: 'Vocês capturaram o JWT de um app mal configurado em <code>Authorization: Bearer ...</code>. Cada um escolhe UMA jogada de ataque — mas nem toda opção funciona: algumas são besteira ou até defesas disfarçadas. Coordenem-se!',
+        dica: 'Ataque real explora uma configuração fraca do token. Se a "jogada" na verdade PROTEGE o sistema, é armadilha.',
+        pecas: [
+            { texto: 'Trocar o header para alg:none e apagar a assinatura, na esperança do servidor aceitar', correta: true },
+            { texto: 'Testar RS256→HS256 assinando com a chave pública como se fosse o segredo (algorithm confusion)', correta: true },
+            { texto: 'Brute force do segredo HMAC quando o token usa um segredo fraco (ex.: "secret")', correta: true },
+            { texto: 'Replay: reenviar o token capturado enquanto ele não expira (não há revogação)', correta: true },
+            { texto: 'Editar a claim role de "user" para "admin" e reassinar, se o segredo for conhecido', correta: true },
+            { texto: 'Decodificar o payload em Base64 para ler dados sensíveis embutidos (recon)', correta: true },
+            { texto: 'Descriptografar o payload com força bruta — ele está cifrado em AES', correta: false },
+            { texto: 'Adicionar a flag Secure ao cookie para roubar a sessão da vítima', correta: false },
+            { texto: 'Encurtar o exp do token para 15 minutos', correta: false },
+            { texto: 'Rotacionar o refresh token da vítima para invalidar o dela', correta: false },
+            { texto: 'Habilitar HSTS no seu proxy para o token vazar mais rápido', correta: false },
+            { texto: 'Mandar um e-mail educado pedindo que a vítima faça login de novo', correta: false },
+        ],
+        explicacao: 'As 6 corretas são ataques que exploram configuração fraca do token: alg:none, algorithm confusion, segredo fraco, replay sem revogação, adulteração de claim e leitura do payload. As armadilhas ou são impossíveis (o payload não é cifrado), ou são DEFESAS (exp curto, rotação, HSTS, Secure), ou nem são ataque técnico.',
+        metaAcertos: 4,
+    },
+    {
+        id: 'op2', modo: 'defesa', titulo: 'Blindar a Emissão e Validação',
+        cenario: 'Agora vocês DEFENDEM. A API de login emite e valida JWTs. Cada um escolhe UMA medida de proteção — cuidado, várias opções parecem convenientes mas abrem brechas graves.',
+        dica: 'Defesa correta fecha uma falha real de token. Se a opção facilita a vida do atacante, é armadilha.',
+        pecas: [
+            { texto: 'Fixar o algoritmo esperado na validação (ex.: só RS256) e rejeitar alg:none', correta: true },
+            { texto: 'Usar segredo/chave forte e aleatório (≥ 256 bits), nunca "secret"', correta: true },
+            { texto: 'Validar exp, iss e aud em toda requisição', correta: true },
+            { texto: 'Access token curto (5–15 min) + refresh token com rotação', correta: true },
+            { texto: 'Servir tudo por HTTPS/HSTS para o token não vazar em trânsito', correta: true },
+            { texto: 'Manter lista de revogação para cortar tokens vazados antes do exp', correta: true },
+            { texto: 'Aceitar qualquer algoritmo que vier no header do token ("flexibilidade")', correta: false },
+            { texto: 'Guardar o refresh token em localStorage para durar mais', correta: false },
+            { texto: 'Colocar o JWT na URL (?token=...) para facilitar o compartilhamento', correta: false },
+            { texto: 'Emitir tokens sem exp para o usuário nunca precisar relogar', correta: false },
+            { texto: 'Incluir a senha do usuário como claim no payload "por conveniência"', correta: false },
+            { texto: 'Reaproveitar o mesmo segredo HMAC de exemplo do tutorial em produção', correta: false },
+        ],
+        explicacao: 'As 6 corretas endereçam alg:none, segredo fraco, validação de claims, ciclo de vida do token, transporte seguro e revogação. As armadilhas são exatamente os erros que criam essas falhas.',
+        metaAcertos: 4,
+    },
+    {
+        id: 'op3', modo: 'ataque', titulo: 'Brechas no Fluxo OAuth',
+        cenario: 'O cliente usa OAuth 2.0, mas o fluxo tem falhas. Voltamos ao ATAQUE: cada um escolhe UMA jogada que realmente compromete o fluxo. Algumas opções, porém, são as defesas do fluxo — não caiam nelas.',
+        dica: 'Se a opção é algo que um fluxo BEM feito já faz (PKCE, state, allowlist), então ela protege — é armadilha para o atacante.',
+        pecas: [
+            { texto: 'Roubar o authorization code via redirect_uri não validado (open redirect)', correta: true },
+            { texto: 'Trocar um code roubado por token num cliente público SEM PKCE', correta: true },
+            { texto: 'Replay de access token que não tem exp curto', correta: true },
+            { texto: 'CSRF no fluxo por ausência do parâmetro state', correta: true },
+            { texto: 'Pedir scopes além do necessário e abusar do token com privilégio excessivo', correta: true },
+            { texto: 'Capturar o token via Implicit Grant, que o devolve na URL (#access_token=)', correta: true },
+            { texto: 'Validar o redirect_uri contra uma allowlist estrita', correta: false },
+            { texto: 'Exigir PKCE com code_challenge no cliente público', correta: false },
+            { texto: 'Adicionar um parâmetro state aleatório e verificá-lo na volta', correta: false },
+            { texto: 'Reduzir os scopes concedidos ao mínimo necessário', correta: false },
+            { texto: 'Trocar o CSS do botão "Entrar com Google"', correta: false },
+            { texto: 'Mudar a porta TCP do Authorization Server', correta: false },
+        ],
+        explicacao: 'As 6 corretas são ataques clássicos de OAuth: roubo de code por redirect aberto, ausência de PKCE, replay, CSRF por falta de state, scope excessivo e Implicit Grant. As armadilhas ou são as próprias defesas (allowlist, PKCE, state, menor privilégio) ou são irrelevantes.',
+        metaAcertos: 4,
+    },
+    {
+        id: 'op4', modo: 'defesa', titulo: 'Proteger Refresh Token e Logout',
+        cenario: 'De volta à DEFESA. O refresh token é o alvo mais valioso: se vazar, o atacante gera access tokens indefinidamente. Cada um escolhe UMA proteção correta para o refresh token e o logout.',
+        dica: 'Pensem no ciclo de vida: onde guardar, como rotacionar, e o que acontece no logout e na troca de senha.',
+        pecas: [
+            { texto: 'Guardar o refresh token em cookie HttpOnly + Secure + SameSite=Strict', correta: true },
+            { texto: 'Rotação a cada uso + detecção de reuso (invalida a família de tokens)', correta: true },
+            { texto: 'Revogar todos os tokens no logout e na troca de senha', correta: true },
+            { texto: 'Reautenticação (senha/2FA) para operações de alto risco', correta: true },
+            { texto: 'Vincular o refresh token ao dispositivo/sessão (fingerprint)', correta: true },
+            { texto: 'Notificar o usuário a cada novo login ou dispositivo', correta: true },
+            { texto: 'Refresh token eterno guardado no localStorage do WebView', correta: false },
+            { texto: 'No logout, apenas apagar o token do front — o servidor continua aceitando', correta: false },
+            { texto: 'Deixar o mesmo refresh token ser reutilizado quantas vezes quiser', correta: false },
+            { texto: 'Compartilhar o mesmo refresh token entre todos os dispositivos do usuário', correta: false },
+            { texto: 'Devolver o refresh token em toda resposta num header X-Refresh', correta: false },
+            { texto: 'Desativar HTTPS na rota de refresh "para poupar CPU"', correta: false },
+        ],
+        explicacao: 'As 6 corretas cobrem armazenamento seguro, rotação com detecção de reuso, revogação no logout, reautenticação, binding ao dispositivo e notificação. As armadilhas são os vazamentos e o "logout falso" mais comuns.',
+        metaAcertos: 4,
+    },
+    {
+        id: 'op5', modo: 'ataque', titulo: 'Campanha Final',
+        cenario: 'Rodada final e é ATAQUE total. O sistema-alvo tem várias fraquezas de token. Cada um escolhe UMA jogada de ataque que realmente funciona. Metade das cartas é isca (defesas e ruído). Fechem a campanha juntos!',
+        dica: 'Vale tudo que explora token mal configurado. Se a carta descreve uma proteção padrão, é isca.',
+        pecas: [
+            { texto: 'alg:none aceito → forjar token sem assinatura', correta: true },
+            { texto: 'Algorithm confusion RS256→HS256 com a chave pública como segredo', correta: true },
+            { texto: 'Brute force de um segredo HMAC fraco', correta: true },
+            { texto: 'Replay de token vazado porque não existe revogação', correta: true },
+            { texto: 'kid injection: manipular o header kid para apontar a uma chave controlada', correta: true },
+            { texto: 'Escalar privilégio trocando a claim role/scope quando o segredo é conhecido', correta: true },
+            { texto: 'Fixar o algoritmo esperado na validação do token', correta: false },
+            { texto: 'Habilitar rotação de refresh token com detecção de reuso', correta: false },
+            { texto: 'Configurar exp curto no access token', correta: false },
+            { texto: 'Ativar HSTS em todos os endpoints', correta: false },
+            { texto: 'Consultar uma denylist de revogação a cada requisição crítica', correta: false },
+            { texto: 'Trocar a cor do botão de login para azul', correta: false },
+        ],
+        explicacao: 'As 6 corretas somam o arsenal contra tokens: alg:none, algorithm confusion, segredo fraco, replay, kid injection e escalada por adulteração de claim. As iscas são todas defesas padrão (mais um ruído puro).',
+        metaAcertos: 4,
+    },
+].map((p, i) => ({ ...p, pecas: misturarPecas(p.pecas, i + 3) }));
+
+let estadoTokensGuerra = {
+    fase: 'aguardando',   // aguardando | sala_aberta | escolhendo | revelado | finalizado
+    rodadaAtual: 0,
+    votos: {},
+    historico: [],
+    pontosTime: 0,
+    acertosPorAluno: {},
+    iniciadoEm: null,
+};
+
+function snapEstadoTokens(aluno) {
+    const p = PUZZLES_TOKENS[estadoTokensGuerra.rodadaAtual - 1] || null;
+    const totalEscolheram = Object.keys(estadoTokensGuerra.votos).length;
+    const minhaPeca = estadoTokensGuerra.votos[aluno] || null;
+    const revelado = estadoTokensGuerra.fase === 'revelado' || estadoTokensGuerra.fase === 'finalizado';
+    const pecasOcupadas = Object.values(estadoTokensGuerra.votos);
+
+    let escolhasReveladas = null;
+    if (revelado && p) {
+        escolhasReveladas = Object.fromEntries(
+            ALUNOS_TOKENS.map(a => {
+                const pecaId = estadoTokensGuerra.votos[a.usuario] || null;
+                const peca   = pecaId ? p.pecas.find(pc => pc.id === pecaId) : null;
+                return [a.usuario, { pecaId, correta: peca ? peca.correta : null }];
+            })
+        );
+    }
+
+    return {
+        fase:            estadoTokensGuerra.fase,
+        rodadaAtual:     estadoTokensGuerra.rodadaAtual,
+        totalRodadas:    PUZZLES_TOKENS.length,
+        totalEscolheram,
+        totalAlunos:     ALUNOS_TOKENS.length,
+        minhaPeca,
+        pontosTime:      estadoTokensGuerra.pontosTime,
+        acertosPorAluno: estadoTokensGuerra.acertosPorAluno,
+        historico:       estadoTokensGuerra.historico,
+        puzzle: p ? {
+            id:       p.id,
+            titulo:   p.titulo,
+            modo:     p.modo,
+            cenario:  p.cenario,
+            dica:     p.dica,
+            metaAcertos: p.metaAcertos,
+            pecas: revelado ? p.pecas : p.pecas.map(pc => ({ id: pc.id, texto: pc.texto })),
+            explicacao: revelado ? p.explicacao : null,
+        } : null,
+        pecasOcupadas: (estadoTokensGuerra.fase === 'escolhendo' || revelado) ? pecasOcupadas : [],
+        escolhasReveladas,
+        acertouRodada: revelado && minhaPeca && p
+            ? (p.pecas.find(pc => pc.id === minhaPeca)?.correta ?? null)
+            : null,
+    };
+}
+
+app.get('/tokens/guerra', exigirLoginTokens, (req, res) => {
+    const nome = req.session.tokensNome;
+    res.send(`<!DOCTYPE html><html lang="pt-BR"><head>
+    <meta charset="UTF-8"><title>Operação Token</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        * { box-sizing:border-box; margin:0; padding:0; }
+        body { font-family:'IBM Plex Sans',system-ui,sans-serif; background:#0b1220; color:#e6eefc; min-height:100vh; }
+        .topo { display:flex; justify-content:space-between; align-items:center; padding:14px 24px; background:#111c33; border-bottom:1px solid #24406b; }
+        .topo-brand { font-size:18px; font-weight:800; color:#38bdf8; }
+        .topo-info  { font-size:12px; color:#64789c; }
+        .placar { display:flex; gap:32px; justify-content:center; padding:18px; background:#0c1830; border-bottom:1px solid #24406b; }
+        .placar-item { text-align:center; }
+        .placar-n  { font-size:28px; font-weight:800; color:#38bdf8; line-height:1; }
+        .placar-l  { font-size:10px; color:#64789c; text-transform:uppercase; letter-spacing:.07em; margin-top:3px; }
+        .main { max-width:880px; margin:0 auto; padding:28px 20px; }
+        .aguardando { text-align:center; padding:60px 20px; }
+        .aguardando h2 { font-size:22px; color:#38bdf8; margin-bottom:10px; }
+        .aguardando p  { color:#64789c; font-size:14px; }
+        .pulse { animation: pulse 2s infinite; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+        .modo-banner { text-align:center; font-size:13px; font-weight:800; letter-spacing:.03em; padding:11px; border-radius:12px; margin-bottom:14px; border:1px solid; }
+        .modo-ataque { background:#2a0f12; border-color:#f87171; color:#fca5a5; }
+        .modo-defesa { background:#06281c; border-color:#34d399; color:#6ee7b7; }
+        .cenario-box { background:#111c33; border:1px solid #24406b; border-radius:14px; padding:22px 24px; margin-bottom:16px; }
+        .puzzle-titulo { font-size:12px; font-weight:700; color:#38bdf8; background:#24406b; padding:3px 10px; border-radius:999px; display:inline-block; margin-bottom:10px; }
+        .puzzle-rod { font-size:11px; color:#64789c; margin-left:8px; }
+        .cenario-txt { font-size:14px; line-height:1.7; color:#e6eefc; margin-bottom:12px; }
+        .cenario-txt code { background:#24406b; padding:2px 7px; border-radius:5px; font-size:12px; color:#7fd0f5; }
+        .dica-box { background:#0c1830; border-left:3px solid #0EA5E9; border-radius:0 8px 8px 0; padding:10px 14px; font-size:12px; color:#7fd0f5; line-height:1.5; }
+        .status-bar { background:#111c33; border:1px solid #24406b; border-radius:10px; padding:11px 16px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
+        .status-txt { font-size:12px; color:#64789c; }
+        .prog-pecas { font-size:13px; font-weight:700; color:#38bdf8; }
+        .pecas-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:20px; }
+        @media(max-width:640px){ .pecas-grid { grid-template-columns:1fr 1fr; } }
+        .peca-btn {
+            background:#111c33; border:2px solid #24406b; border-radius:12px; padding:14px 12px;
+            cursor:pointer; text-align:left; color:#e6eefc; transition:all .15s;
+            display:flex; flex-direction:column; gap:5px; min-height:96px;
+        }
+        .peca-btn:hover:not(:disabled):not(.tomada) { border-color:#0EA5E9; background:#16264a; }
+        .peca-btn.minha    { border-color:#38bdf8; background:#16264a; }
+        .peca-btn.tomada   { opacity:.38; cursor:default; }
+        .peca-btn:disabled { cursor:default; }
+        .peca-id  { font-size:10px; font-weight:800; color:#64789c; }
+        .peca-txt { font-size:12px; line-height:1.5; flex:1; }
+        .peca-meta { font-size:10px; margin-top:2px; }
+        .peca-btn.ok  { border-color:#22c55e; background:#052e16; cursor:default; }
+        .peca-btn.err { border-color:#ef4444; background:#2d0707; cursor:default; }
+        .peca-btn.minha-ok  { border-color:#22c55e; background:#052e16; box-shadow:0 0 0 3px rgba(34,197,94,.25); cursor:default; }
+        .peca-btn.minha-err { border-color:#ef4444; background:#2d0707; box-shadow:0 0 0 3px rgba(239,68,68,.25); cursor:default; }
+        .peca-id.ok  { color:#22c55e; }
+        .peca-id.err { color:#ef4444; }
+        .chip-aluno { font-size:10px; font-weight:700; padding:2px 7px; border-radius:999px; display:inline-block; }
+        .chip-aluno.ok  { background:#052e16; color:#22c55e; border:1px solid #22c55e; }
+        .chip-aluno.err { background:#2d0707; color:#ef4444; border:1px solid #ef4444; }
+        .resultado-box { background:#0d2a18; border:2px solid #22c55e; border-radius:14px; padding:18px 22px; margin-bottom:18px; }
+        .resultado-box.errou { background:#2d0707; border-color:#ef4444; }
+        .resultado-titulo { font-size:20px; font-weight:800; margin-bottom:8px; }
+        .resultado-exp { font-size:13px; line-height:1.6; opacity:.9; }
+        .final-box  { text-align:center; padding:40px 20px; }
+        .final-titulo { font-size:26px; font-weight:800; color:#38bdf8; margin-bottom:8px; }
+        .final-sub    { font-size:14px; color:#64789c; margin-bottom:28px; }
+        .ranking { list-style:none; max-width:400px; margin:0 auto; }
+        .ranking li { display:flex; justify-content:space-between; align-items:center; background:#111c33; border:1px solid #24406b; border-radius:10px; padding:12px 18px; margin-bottom:8px; }
+        .rank-pos  { font-size:18px; width:30px; }
+        .rank-nome { font-size:14px; font-weight:600; flex:1; padding:0 10px; }
+        .rank-pts  { font-size:14px; font-weight:800; color:#38bdf8; }
+    </style>
+</head><body>
+    <div class="topo">
+        <div class="topo-brand">🎯 Operação Token</div>
+        <div class="topo-info">👤 ${escapeHtml(nome)} &nbsp;|&nbsp; <span id="poll-status" style="font-size:10px;color:#3b4a63;">🟡 conectando...</span> &nbsp;|&nbsp; <a href="/tokens/lab" style="color:#64789c;font-size:11px;">← Lab</a></div>
+    </div>
+    <div class="placar">
+        <div class="placar-item"><div class="placar-n" id="pts-time">0</div><div class="placar-l">Pontos do Time</div></div>
+        <div class="placar-item"><div class="placar-n" id="puzzle-num">—</div><div class="placar-l">Rodada</div></div>
+        <div class="placar-item"><div class="placar-n" id="escolheram-count">0</div><div class="placar-l">Escolheram</div></div>
+    </div>
+    <div class="main" id="main-conteudo">
+        <div class="aguardando">
+            <h2 class="pulse">⏳ Aguardando o professor iniciar a operação...</h2>
+            <p>Quando a primeira rodada começar, as cartas aparecerão aqui.</p>
+        </div>
+    </div>
+    <script>
+    const MEU_ALUNO = '${req.session.tokensAluno}';
+    const NOMES_ALUNOS = ${JSON.stringify(Object.fromEntries(ALUNOS_TOKENS.map(a => [a.usuario, a.nomeExibicao])))};
+    let estadoAnterior = null;
+
+    function renderAguardando(salaAberta) {
+        document.getElementById('main-conteudo').innerHTML = salaAberta ? \`
+            <div class="aguardando">
+                <h2 class="pulse">✅ Você está na Operação Token!</h2>
+                <p>Aguardando o professor iniciar a primeira rodada...</p>
+                <p style="margin-top:12px;font-size:12px;color:#3b4a63;">Os colegas também precisam entrar antes de começar.</p>
+            </div>\` : \`
+            <div class="aguardando">
+                <h2 class="pulse">⏳ Aguardando o professor liberar a sala...</h2>
+                <p>Fique nessa tela. A operação começará em breve.</p>
+            </div>\`;
+    }
+
+    function bannerModo(modo) {
+        return modo === 'ataque'
+            ? '<div class="modo-banner modo-ataque">🗡️ RODADA DE ATAQUE — encontrem as jogadas que REALMENTE funcionam</div>'
+            : '<div class="modo-banner modo-defesa">🛡️ RODADA DE DEFESA — escolham as proteções CORRETAS</div>';
+    }
+
+    function renderEscolhendo(estado) {
+        const p = estado.puzzle;
+        const ocupadas = new Set(estado.pecasOcupadas || []);
+        const minha = estado.minhaPeca;
+        const instrucao = minha
+            ? '✅ Carta reservada! Pode trocar enquanto o professor não revelar.'
+            : (p.modo === 'ataque' ? '⬆️ Escolha UMA jogada de ATAQUE que realmente funciona' : '⬆️ Escolha UMA DEFESA correta');
+        document.getElementById('main-conteudo').innerHTML = \`
+            \${bannerModo(p.modo)}
+            <div class="cenario-box">
+                <div><span class="puzzle-titulo">\${p.titulo}</span><span class="puzzle-rod">Rodada \${estado.rodadaAtual}/\${estado.totalRodadas}</span></div>
+                <div class="cenario-txt">\${p.cenario}</div>
+                <div class="dica-box">💡 \${p.dica}</div>
+            </div>
+            <div class="status-bar">
+                <span class="status-txt" id="status-escolha">\${instrucao}</span>
+                <span class="prog-pecas" id="prog-pecas">\${estado.totalEscolheram}/\${estado.totalAlunos} escolheram</span>
+            </div>
+            <div class="pecas-grid" id="pecas-grid">
+                \${p.pecas.map(pc => {
+                    const ehMinha = minha === pc.id;
+                    const tomada  = !ehMinha && ocupadas.has(pc.id);
+                    return \`<button class="peca-btn \${ehMinha?'minha':''} \${tomada?'tomada':''}"
+                        id="peca-\${pc.id}" onclick="escolher('\${pc.id}')" \${tomada?'disabled':''}>
+                        <span class="peca-id">Carta \${pc.id.toUpperCase()}</span>
+                        <span class="peca-txt">\${pc.texto}</span>
+                        <span class="peca-meta" style="color:\${ehMinha?'#38bdf8':tomada?'#3b4a63':'#24406b'};">\${ehMinha?'✓ sua escolha':tomada?'🔒 tomada':''}</span>
+                    </button>\`;
+                }).join('')}
+            </div>\`;
+    }
+
+    function renderRevelado(estado) {
+        const p = estado.puzzle;
+        const minha = estado.minhaPeca;
+        const acertei = estado.acertouRodada;
+        const ult = estado.historico.length > 0 ? estado.historico[estado.historico.length-1] : {};
+        const pontosGanhos = ult.pontosGanhos || 0;
+        const corretosCount = ult.corretosCount || 0;
+        const rotulo = p.modo === 'ataque' ? 'jogadas de ataque certeiras' : 'defesas corretas';
+        document.getElementById('main-conteudo').innerHTML = \`
+            \${bannerModo(p.modo)}
+            <div class="resultado-box \${acertei===false?'errou':''}">
+                <div class="resultado-titulo">\${acertei===true?'🎯 Você escolheu certo!':acertei===false?'❌ Sua carta era uma isca.':'👁️ Resultado'}</div>
+                <div class="resultado-exp">\${p.explicacao}</div>
+            </div>
+            <p style="text-align:center;font-size:13px;color:\${pontosGanhos?'#22c55e':'#ef4444'};font-weight:700;margin-bottom:16px;">
+                \${pontosGanhos?\`🏆 +1 ponto para o time! (\${corretosCount} \${rotulo})\`:\`💀 Poucos acertos — sem ponto. Acertos do time: \${corretosCount}/\${p.metaAcertos} necessários\`}
+            </p>
+            <div class="pecas-grid">
+                \${p.pecas.map(pc => {
+                    const ehMinha = minha === pc.id;
+                    const cls = ehMinha?(pc.correta?'minha-ok':'minha-err'):(pc.correta?'ok':'err');
+                    const idCls = pc.correta?'ok':'err';
+                    const quem = estado.escolhasReveladas
+                        ? Object.entries(estado.escolhasReveladas).filter(([u,d])=>d.pecaId===pc.id).map(([u])=>NOMES_ALUNOS[u]||u)
+                        : [];
+                    return \`<div class="peca-btn \${cls}">
+                        <span class="peca-id \${idCls}">Carta \${pc.id.toUpperCase()} \${pc.correta?'✓':'✗'}</span>
+                        <span class="peca-txt">\${pc.texto}</span>
+                        <span class="peca-meta">\${quem.map(n=>\`<span class="chip-aluno \${pc.correta?'ok':'err'}">\${n}</span>\`).join('')}</span>
+                    </div>\`;
+                }).join('')}
+            </div>
+            <p style="text-align:center;font-size:12px;color:#64789c;margin-top:4px;">Aguardando o professor avançar...</p>\`;
+    }
+
+    function renderFinal(estado) {
+        const alunos = ${JSON.stringify(ALUNOS_TOKENS.map(a => ({ u: a.usuario, n: a.nomeExibicao })))};
+        const ranking = alunos.map(a => ({ nome: a.n, pts: estado.acertosPorAluno[a.u] || 0 }))
+            .sort((a,b) => b.pts - a.pts);
+        const medalhas = ['🥇','🥈','🥉'];
+        const ganhou = estado.pontosTime >= 3;
+        document.getElementById('main-conteudo').innerHTML = \`
+            <div class="final-box">
+                <div class="final-titulo">\${ganhou?'🏆 Operação Concluída!':'💀 Missão falhou!'}</div>
+                <div class="final-sub">\${estado.pontosTime}/\${estado.totalRodadas} rodadas vencidas</div>
+                <ul class="ranking">
+                    \${ranking.map((r,i) => \`<li>
+                        <span class="rank-pos">\${medalhas[i]||'  '}</span>
+                        <span class="rank-nome">\${r.nome}</span>
+                        <span class="rank-pts">\${r.pts} acertos</span>
+                    </li>\`).join('')}
+                </ul>
+            </div>\`;
+    }
+
+    function render(estado) {
+        document.getElementById('pts-time').textContent     = estado.pontosTime;
+        document.getElementById('puzzle-num').textContent   = estado.rodadaAtual > 0 ? estado.rodadaAtual + '/' + estado.totalRodadas : '—';
+        document.getElementById('escolheram-count').textContent = estado.totalEscolheram + '/' + estado.totalAlunos;
+
+        const faseAnt = estadoAnterior ? estadoAnterior.fase : null;
+        const rodAnt  = estadoAnterior ? estadoAnterior.rodadaAtual : null;
+
+        if (estado.fase === 'aguardando')   { renderAguardando(false); }
+        else if (estado.fase === 'sala_aberta') { if (faseAnt !== 'sala_aberta') renderAguardando(true); }
+        else if (estado.fase === 'escolhendo') {
+            if (faseAnt !== 'escolhendo' || rodAnt !== estado.rodadaAtual) {
+                renderEscolhendo(estado);
+            } else {
+                const ocupadas = new Set(estado.pecasOcupadas || []);
+                const minha = estado.minhaPeca;
+                if (estado.puzzle && estado.puzzle.pecas) {
+                    estado.puzzle.pecas.forEach(pc => {
+                        const btn = document.getElementById('peca-' + pc.id);
+                        if (!btn) return;
+                        const ehMinha = minha === pc.id;
+                        const tomada  = !ehMinha && ocupadas.has(pc.id);
+                        btn.disabled = tomada;
+                        btn.className = 'peca-btn' + (ehMinha?' minha':tomada?' tomada':'');
+                        const meta = btn.querySelector('.peca-meta');
+                        if (meta) meta.textContent = ehMinha ? '✓ sua escolha' : tomada ? '🔒 tomada' : '';
+                    });
+                }
+                const prog = document.getElementById('prog-pecas');
+                if (prog) prog.textContent = estado.totalEscolheram + '/' + estado.totalAlunos + ' escolheram';
+                const st = document.getElementById('status-escolha');
+                if (st && minha && !estadoAnterior?.minhaPeca) {
+                    st.textContent = '✅ Carta reservada! Pode trocar enquanto o professor não revelar.';
+                }
+            }
+        }
+        else if (estado.fase === 'revelado') {
+            if (faseAnt !== 'revelado' || rodAnt !== estado.rodadaAtual) { renderRevelado(estado); }
+        }
+        else if (estado.fase === 'finalizado') { renderFinal(estado); }
+
+        estadoAnterior = estado;
+    }
+
+    async function escolher(pecaId) {
+        try {
+            const r = await fetch('/tokens/guerra/votar', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ opcao: pecaId }) });
+            const res = await r.json();
+            if (!res.ok) {
+                const st = document.getElementById('status-escolha');
+                if (st) st.textContent = '⚠️ Essa carta já foi tomada! Escolha outra.';
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    async function poll() {
+        try {
+            const r = await fetch('/tokens/guerra/estado');
+            if (!r.ok) { console.error('poll HTTP', r.status); return; }
+            const estado = await r.json();
+            render(estado);
+            const el = document.getElementById('poll-status');
+            if (el) el.textContent = '🟢 ' + new Date().toLocaleTimeString('pt-BR');
+        } catch(e) { console.error('poll erro:', e);
+            const el = document.getElementById('poll-status');
+            if (el) el.textContent = '🔴 erro de conexão';
+        }
+    }
+
+    poll();
+    setInterval(poll, 2000);
+    </script>
+</body></html>`);
+});
+
+app.get('/tokens/guerra/estado', exigirLoginTokens, (req, res) => {
+    res.json(snapEstadoTokens(req.session.tokensAluno));
+});
+
+app.post('/tokens/guerra/votar', exigirLoginTokens, (req, res) => {
+    const aluno = req.session.tokensAluno;
+    const { opcao } = req.body;
+    if (estadoTokensGuerra.fase !== 'escolhendo') return res.json({ ok: false, erro: 'Fora do período de escolha' });
+    const p = PUZZLES_TOKENS[estadoTokensGuerra.rodadaAtual - 1];
+    if (!p) return res.json({ ok: false, erro: 'Rodada inválida' });
+    if (!p.pecas.find(pc => pc.id === opcao)) return res.json({ ok: false, erro: 'Carta inválida' });
+    const ocupadaPor = Object.entries(estadoTokensGuerra.votos).find(([a, id]) => id === opcao && a !== aluno);
+    if (ocupadaPor) return res.json({ ok: false, erro: 'Carta já tomada' });
+    estadoTokensGuerra.votos[aluno] = opcao;
+    res.json({ ok: true });
+});
+
+app.get('/tokens/guerra/controle-estado', (req, res) => {
+    res.json({
+        fase:        estadoTokensGuerra.fase,
+        rodadaAtual: estadoTokensGuerra.rodadaAtual,
+        votos:       estadoTokensGuerra.votos,
+        historico:   estadoTokensGuerra.historico,
+        pontosTime:  estadoTokensGuerra.pontosTime,
+        acertosPorAluno: estadoTokensGuerra.acertosPorAluno,
+    });
+});
+
+app.post('/tokens/guerra/controle', (req, res) => {
+    const { acao } = req.body;
+
+    if (acao === 'reset') {
+        estadoTokensGuerra = { fase:'aguardando', rodadaAtual:0, votos:{}, historico:[], pontosTime:0, acertosPorAluno:{}, iniciadoEm:null };
+        return res.json({ ok: true });
+    }
+    if (acao === 'liberar') {
+        if (estadoTokensGuerra.fase === 'aguardando' || estadoTokensGuerra.fase === 'finalizado') {
+            estadoTokensGuerra = { fase:'sala_aberta', rodadaAtual:0, votos:{}, historico:[], pontosTime:0, acertosPorAluno:{}, iniciadoEm:null };
+            return res.json({ ok: true });
+        }
+    }
+    if (acao === 'iniciar') {
+        if (estadoTokensGuerra.fase === 'sala_aberta') {
+            estadoTokensGuerra.fase = 'escolhendo';
+            estadoTokensGuerra.rodadaAtual = 1;
+            estadoTokensGuerra.votos = {};
+            estadoTokensGuerra.iniciadoEm = Date.now();
+            return res.json({ ok: true });
+        }
+    }
+    if (acao === 'revelar') {
+        if (estadoTokensGuerra.fase !== 'escolhendo') return res.json({ ok: false });
+        const p = PUZZLES_TOKENS[estadoTokensGuerra.rodadaAtual - 1];
+        const corretosCount = Object.entries(estadoTokensGuerra.votos).filter(([, pecaId]) => {
+            const peca = p.pecas.find(pc => pc.id === pecaId);
+            return peca && peca.correta;
+        }).length;
+        const pontosGanhos = corretosCount >= p.metaAcertos ? 1 : 0;
+        estadoTokensGuerra.pontosTime += pontosGanhos;
+        Object.entries(estadoTokensGuerra.votos).forEach(([aluno, pecaId]) => {
+            const peca = p.pecas.find(pc => pc.id === pecaId);
+            if (peca && peca.correta) {
+                estadoTokensGuerra.acertosPorAluno[aluno] = (estadoTokensGuerra.acertosPorAluno[aluno] || 0) + 1;
+            }
+        });
+        estadoTokensGuerra.historico.push({ rodada: estadoTokensGuerra.rodadaAtual, corretosCount, votos: {...estadoTokensGuerra.votos}, pontosGanhos });
+        estadoTokensGuerra.fase = 'revelado';
+        return res.json({ ok: true });
+    }
+    if (acao === 'proximo') {
+        if (estadoTokensGuerra.fase !== 'revelado') return res.json({ ok: false });
+        if (estadoTokensGuerra.rodadaAtual >= PUZZLES_TOKENS.length) {
+            estadoTokensGuerra.fase = 'finalizado';
+        } else {
+            estadoTokensGuerra.rodadaAtual++;
+            estadoTokensGuerra.votos = {};
+            estadoTokensGuerra.fase = 'escolhendo';
+        }
+        return res.json({ ok: true });
+    }
+    res.json({ ok: false, erro: 'Ação desconhecida' });
+});
+
+app.get('/tokens/guerra/painel', (req, res) => {
+    res.send(`<!DOCTYPE html><html lang="pt-BR"><head>
+    <meta charset="UTF-8"><title>Painel Professor — Operação Token</title>
+    <style>
+        * { box-sizing:border-box; margin:0; padding:0; }
+        body { font-family:system-ui,sans-serif; background:#0b1220; color:#e6eefc; min-height:100vh; padding:28px; }
+        h1 { color:#38bdf8; margin-bottom:4px; }
+        .sub { color:#64789c; font-size:13px; margin-bottom:22px; }
+        .controles { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:24px; }
+        .btn { padding:12px 22px; border:none; border-radius:10px; font-size:14px; font-weight:700; cursor:pointer; transition:opacity .15s; }
+        .btn:hover { opacity:.85; }
+        .btn-liberar { background:#0891B2; color:white; }
+        .btn-iniciar { background:#38bdf8; color:#052538; }
+        .btn-revelar { background:#f59e0b; color:white; }
+        .btn-proximo { background:#22c55e; color:#052e16; }
+        .btn-reset   { background:#ef4444; color:white; }
+        .btn:disabled { opacity:.35; cursor:default; }
+        .painel-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:20px; }
+        .card { background:#111c33; border:1px solid #24406b; border-radius:14px; padding:20px; }
+        .card h3 { font-size:14px; color:#38bdf8; margin-bottom:14px; }
+        .placar-row { display:flex; justify-content:space-around; background:#0c1830; border-radius:10px; padding:14px; margin-bottom:14px; }
+        .placar-item { text-align:center; }
+        .placar-n { font-size:26px; font-weight:800; color:#38bdf8; line-height:1; }
+        .placar-l { font-size:10px; color:#64789c; text-transform:uppercase; margin-top:3px; }
+        .puzzle-info { background:#0c1830; border-radius:10px; padding:12px 14px; font-size:13px; line-height:1.6; margin-bottom:12px; color:#e6eefc; }
+        .puzzle-info code { background:#24406b; padding:2px 5px; border-radius:3px; color:#7fd0f5; }
+        .tag-modo { font-size:10px; font-weight:800; padding:2px 8px; border-radius:999px; margin-left:6px; }
+        .tag-ataque { background:#2a0f12; color:#fca5a5; border:1px solid #f87171; }
+        .tag-defesa { background:#06281c; color:#6ee7b7; border:1px solid #34d399; }
+        .alunos-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+        .aluno-chip { background:#0c1830; border:1px solid #24406b; border-radius:8px; padding:8px 10px; font-size:12px; text-align:center; transition:border-color .2s; }
+        .aluno-chip.escolheu { border-color:#38bdf8; }
+        .chip-status { font-weight:800; color:#38bdf8; font-size:16px; margin-top:3px; }
+        .pecas-lista { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; }
+        .peca-item { border-radius:8px; padding:10px 12px; font-size:12px; line-height:1.5; }
+        .peca-item.ok  { background:#052e16; border:1px solid #22c55e; }
+        .peca-item.err { background:#2d0707; border:1px solid #ef4444; }
+        .peca-sigla { font-size:11px; font-weight:800; display:block; margin-bottom:4px; }
+        .peca-sigla.ok  { color:#22c55e; }
+        .peca-sigla.err { color:#ef4444; }
+        .peca-desc { color:#e6eefc; opacity:.85; display:block; margin-bottom:6px; }
+        .peca-aluno { font-size:10px; font-weight:700; padding:1px 7px; border-radius:999px; margin-right:4px; display:inline-block; }
+        .peca-aluno.ok  { background:#052e16; color:#22c55e; border:1px solid #22c55e; }
+        .peca-aluno.err { background:#2d0707; color:#ef4444; border:1px solid #ef4444; }
+        .historico-item { font-size:12px; color:#64789c; padding:7px 0; border-bottom:1px solid #24406b; display:flex; justify-content:space-between; }
+        #status-poll { font-size:11px; color:#64789c; margin-top:12px; }
+    </style>
+</head><body>
+    <h1>🎯 Operação Token — Painel do Professor</h1>
+    <div class="sub">Ataque × Defesa alternado · Aula 19 · Polling a cada 2s</div>
+
+    <div class="controles">
+        <button class="btn btn-liberar" id="btn-lib"  onclick="controle('liberar')">🔓 Liberar Sala</button>
+        <button class="btn btn-iniciar" id="btn-ini"  onclick="controle('iniciar')" disabled>▶ Iniciar Rodada 1</button>
+        <button class="btn btn-revelar" id="btn-rev"  onclick="controle('revelar')" disabled>👁 Revelar Cartas</button>
+        <button class="btn btn-proximo" id="btn-prox" onclick="controle('proximo')" disabled>⏭ Próxima Rodada</button>
+        <button class="btn btn-reset"   id="btn-rst"  onclick="controle('reset')">🔄 Resetar Jogo</button>
+    </div>
+
+    <div class="painel-grid">
+        <div class="card">
+            <h3>📊 Estado Atual</h3>
+            <div class="placar-row">
+                <div class="placar-item"><div class="placar-n" id="p-pts">0</div><div class="placar-l">Pontos Time</div></div>
+                <div class="placar-item"><div class="placar-n" id="p-rod">—</div><div class="placar-l">Rodada</div></div>
+                <div class="placar-item"><div class="placar-n" id="p-fase">—</div><div class="placar-l">Fase</div></div>
+            </div>
+            <div class="puzzle-info" id="puzzle-info">Nenhuma rodada ativa.</div>
+        </div>
+        <div class="card">
+            <h3>👥 Alunos</h3>
+            <div class="alunos-grid" id="alunos-grid">
+                ${ALUNOS_TOKENS.map(a => `<div class="aluno-chip" id="chip-${a.usuario}">
+                    <div style="font-size:11px;color:#64789c;">${a.nomeExibicao}</div>
+                    <div class="chip-status" id="status-${a.usuario}">—</div>
+                </div>`).join('')}
+            </div>
+            <div id="status-poll">🟡 Aguardando...</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>🃏 Cartas da Rodada Atual</h3>
+        <div id="pecas-box"><p style="color:#64789c;font-size:12px;">Será exibido após revelar.</p></div>
+    </div>
+
+    <div class="card" style="margin-top:20px;">
+        <h3>📜 Histórico de Rodadas</h3>
+        <div id="historico-lista"><p style="color:#64789c;font-size:12px;">Nenhuma rodada concluída ainda.</p></div>
+    </div>
+
+    <script>
+    const TOTAL_ALUNOS = ${ALUNOS_TOKENS.length};
+    const NOMES = ${JSON.stringify(Object.fromEntries(ALUNOS_TOKENS.map(a => [a.usuario, a.nomeExibicao])))};
+    const PUZZLES = ${JSON.stringify(PUZZLES_TOKENS.map(p => ({ id:p.id, titulo:p.titulo, modo:p.modo, cenario:p.cenario, metaAcertos:p.metaAcertos, pecas:p.pecas })))};
+
+    async function controle(acao) {
+        await fetch('/tokens/guerra/controle', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ acao }) });
+        await poll();
+    }
+
+    function atualizarBotoes(fase) {
+        document.getElementById('btn-lib').disabled  = fase !== 'aguardando' && fase !== 'finalizado';
+        document.getElementById('btn-ini').disabled  = fase !== 'sala_aberta';
+        document.getElementById('btn-rev').disabled  = fase !== 'escolhendo';
+        document.getElementById('btn-prox').disabled = fase !== 'revelado';
+        document.getElementById('btn-rst').disabled  = false;
+    }
+
+    async function poll() {
+        try {
+            const r = await fetch('/tokens/guerra/controle-estado');
+            const estado = await r.json();
+
+            document.getElementById('p-pts').textContent  = estado.pontosTime;
+            document.getElementById('p-rod').textContent  = estado.rodadaAtual > 0 ? estado.rodadaAtual + '/' + PUZZLES.length : '—';
+            document.getElementById('p-fase').textContent = estado.fase;
+            atualizarBotoes(estado.fase);
+
+            const p = estado.rodadaAtual > 0 ? PUZZLES[estado.rodadaAtual - 1] : null;
+            const totalEscolheram = Object.keys(estado.votos).length;
+            document.getElementById('puzzle-info').innerHTML = p
+                ? \`<strong>\${p.titulo}</strong><span class="tag-modo \${p.modo==='ataque'?'tag-ataque':'tag-defesa'}">\${p.modo==='ataque'?'🗡️ ATAQUE':'🛡️ DEFESA'}</span><br><span style="font-size:12px;color:#38bdf8;">\${totalEscolheram}/\${TOTAL_ALUNOS} escolheram · precisa de \${p.metaAcertos} certas</span><br><span style="font-size:12px;color:#64789c;">\${p.cenario.replace(/<[^>]+>/g,'').substring(0,120)}...</span>\`
+                : 'Nenhuma rodada ativa.';
+
+            Object.entries(NOMES).forEach(([u, nome]) => {
+                const chip   = document.getElementById('chip-' + u);
+                const status = document.getElementById('status-' + u);
+                const escolheu = !!estado.votos[u];
+                if (chip)   chip.classList.toggle('escolheu', escolheu);
+                if (status) status.textContent = escolheu ? '✓' : '—';
+            });
+
+            const pecasBox = document.getElementById('pecas-box');
+            if (p && (estado.fase === 'revelado' || estado.fase === 'finalizado')) {
+                pecasBox.innerHTML = \`<div class="pecas-lista">\${p.pecas.map(pc => {
+                    const quem = Object.entries(NOMES)
+                        .filter(([u]) => estado.votos[u] === pc.id)
+                        .map(([u,n]) => n);
+                    const cls = pc.correta ? 'ok' : 'err';
+                    return \`<div class="peca-item \${cls}">
+                        <span class="peca-sigla \${cls}">Carta \${pc.id.toUpperCase()} \${pc.correta?'✓':'✗'}</span>
+                        <span class="peca-desc">\${pc.texto}</span>
+                        \${quem.map(n=>\`<span class="peca-aluno \${cls}">\${n}</span>\`).join('')}
+                    </div>\`;
+                }).join('')}</div>\`;
+            } else {
+                pecasBox.innerHTML = p
+                    ? \`<p style="color:#64789c;font-size:12px;">Aguardando todos escolherem — cartas reveladas após clicar "Revelar Cartas".</p>\`
+                    : \`<p style="color:#64789c;font-size:12px;">Nenhuma rodada ativa.</p>\`;
+            }
+
+            const hist = document.getElementById('historico-lista');
+            if (estado.historico.length > 0) {
+                hist.innerHTML = estado.historico.map(h => {
+                    const ph = PUZZLES[h.rodada - 1];
+                    return \`<div class="historico-item">
+                        <span>R\${h.rodada}: \${ph ? ph.titulo : ''} \${ph?(ph.modo==='ataque'?'🗡️':'🛡️'):''}</span>
+                        <span style="color:\${h.pontosGanhos?'#22c55e':'#ef4444'};">\${h.corretosCount}/\${ph?ph.metaAcertos:4} certas · \${h.pontosGanhos?'+1 ponto':'sem ponto'}</span>
+                    </div>\`;
+                }).reverse().join('');
+            }
+
+            document.getElementById('status-poll').textContent = '🟢 Atualizado: ' + new Date().toLocaleTimeString('pt-BR');
+        } catch(e) { document.getElementById('status-poll').textContent = '🔴 Falha: ' + e.message; }
+    }
+
+    poll();
+    setInterval(poll, 2000);
+    </script>
+</body></html>`);
 });
 
 // Inicialização da porta dinâmica (Render ou Local)
