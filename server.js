@@ -7478,6 +7478,602 @@ app.get('/tokens/guerra/painel', (req, res) => {
 </body></html>`);
 });
 
+// =====================================================================
+// LAB PBL: MAPEAR AMEAÇAS E RISCOS (Aula 20) — /pbl
+// Exercício PBL em grupo: cenário PedeJá (app de delivery com API).
+// Respostas dissertativas salvas por aluno; sem validação de gabarito
+// (a correção é feita pelo instrutor no painel do professor).
+// =====================================================================
+
+const ALUNOS_PBL = ALUNOS_APIS;          // mesma turma
+const CREDENCIAIS_PBL = CREDENCIAIS_APIS;
+
+const ETAPAS_PBL = [
+    { id: 'e1', nome: 'Superfície de Ataque', tempo: 8 },
+    { id: 'e2', nome: 'STRIDE',               tempo: 12 },
+    { id: 'e3', nome: 'Autenticação',         tempo: 5 },
+    { id: 'e4', nome: 'Entrega Final',        tempo: 5 },
+];
+
+const COMPONENTES_PBL = [
+    'App do Cliente', 'Painel do Restaurante', 'App do Entregador',
+    'API Gateway', 'Serviço de Autenticação', 'Serviço de Pedidos',
+    'Serviço de Pagamentos', 'Banco de Dados',
+    'Integração PagFácil', 'Integração MapaZap', 'Integração NotifyHub',
+];
+
+const CATEGORIAS_STRIDE_PBL = [
+    'Spoofing', 'Tampering', 'Repudiation',
+    'Information Disclosure', 'Denial of Service', 'Elevation of Privilege',
+];
+
+function exigirLoginPbl(req, res, next) {
+    if (req.session.pblAluno) return next();
+    res.redirect('/pbl');
+}
+
+// Critério mínimo para considerar a etapa "entregue" (não é gabarito,
+// só evita entrega em branco — a avaliação de conteúdo é do instrutor)
+function etapaPblCompleta(etapa, r) {
+    const txt = v => String(v || '').trim();
+    if (etapa === 'e1') return txt(r.p1).length >= 15 && txt(r.p2).length >= 15 && txt(r.p3).length >= 15;
+    if (etapa === 'e3') return txt(r.r1).length >= 10 && txt(r.r2).length >= 10 && txt(r.riscos).length >= 30;
+    if (etapa === 'e2' || etapa === 'e4') {
+        const linhas = Array.isArray(r.linhas) ? r.linhas : [];
+        const completas = linhas.filter(l => l && Object.values(l).every(v => txt(v).length > 0)).length;
+        return completas >= 3;
+    }
+    return false;
+}
+
+const CONCEITOS_PBL = [
+    { icone: '🎯', nome: 'Superfície de ataque', conteudo: 'É o conjunto de <b>todos os pontos por onde dados de fora entram ou saem</b> do sistema: endpoints, formulários, integrações externas, filas, uploads. Todo mapeamento de ameaças começa listando esses pontos — o que não está no mapa não é protegido.' },
+    { icone: '🗺️', nome: 'STRIDE (relembrando)', conteudo: '<b>S</b>poofing — fingir ser outra identidade.<br><b>T</b>ampering — adulterar dados ou mensagens.<br><b>R</b>epudiation — negar que fez algo (sem trilha de auditoria).<br><b>I</b>nformation Disclosure — vazamento de dados.<br><b>D</b>enial of Service — derrubar ou degradar o serviço.<br><b>E</b>levation of Privilege — ganhar permissões que não deveria ter.' },
+    { icone: '🔑', nome: 'Ciclo de vida do token', conteudo: 'Um token saudável tem: <b>expiração curta</b> (claim <code>exp</code>), <b>refresh token com rotação</b>, <b>revogação</b> (logout, troca de senha, vazamento) e <b>armazenamento seguro</b> no cliente. Se qualquer elo desse ciclo faltar, um token vazado vira um problema permanente.' },
+    { icone: '⚖️', nome: 'Como priorizar riscos', conteudo: 'Risco = <b>probabilidade × impacto</b>. Um risco de alta probabilidade e alto impacto é <b>crítico</b> e vai para o topo da lista. Priorizar é o que transforma uma lista de ameaças em um plano de ação — ninguém corrige tudo ao mesmo tempo.' },
+];
+
+const ENDPOINTS_PBL = [
+    { metodo: 'POST', rota: '/api/v1/auth/login',                        auth: 'Pública', desc: 'Recebe e-mail e senha, retorna o JWT. Aceita quantas tentativas forem necessárias.' },
+    { metodo: 'POST', rota: '/api/v1/auth/registrar',                    auth: 'Pública', desc: 'Cria conta com nome, CPF, e-mail, senha, telefone e endereço.' },
+    { metodo: 'GET',  rota: '/api/v1/usuarios/{id}',                     auth: 'JWT',     desc: 'Retorna o perfil completo: nome, CPF, endereço, telefone. IDs são sequenciais (1001, 1002...).' },
+    { metodo: 'GET',  rota: '/api/v1/pedidos/{id}',                      auth: 'JWT',     desc: 'Detalhes do pedido: itens, valor e endereço de entrega. IDs também sequenciais.' },
+    { metodo: 'POST', rota: '/api/v1/pedidos',                           auth: 'JWT',     desc: 'Cria o pedido. O app envia os itens e o preço total já calculado no celular.' },
+    { metodo: 'POST', rota: '/api/v1/pagamentos',                        auth: 'JWT',     desc: 'Recebe número do cartão, validade e CVV e repassa ao PagFácil. Em caso de erro, o corpo completo da requisição é gravado no log para facilitar a depuração.' },
+    { metodo: 'GET',  rota: '/api/v1/entregadores/{id}/localizacao',     auth: 'JWT',     desc: 'Posição em tempo real do entregador, usada pelo mapa do cliente.' },
+    { metodo: 'GET',  rota: '/api/v1/admin/relatorios',                  auth: 'JWT',     desc: 'Relatório de vendas de todos os restaurantes. Usado só pelo time interno, mas publicado no mesmo gateway.' },
+];
+
+function renderSidebarPbl() {
+    return CONCEITOS_PBL.map((c, i) => `
+        <div class="surf-category">
+            <div class="surf-cat-header" onclick="toggleConceitoPbl(${i})">
+                <span class="surf-icon">${c.icone}</span>
+                <span class="surf-cat-name">${c.nome}</span>
+                <span class="surf-cat-arrow" id="pblarrow-${i}">▶</span>
+            </div>
+            <div class="surf-cat-body" id="pblconceito-${i}">${c.conteudo}</div>
+        </div>`).join('');
+}
+
+function renderCenarioPbl() {
+    const linhasEndpoints = ENDPOINTS_PBL.map(e => `
+        <tr>
+            <td><span class="metodo metodo-${e.metodo.toLowerCase()}">${e.metodo}</span></td>
+            <td><code>${e.rota}</code></td>
+            <td>${e.auth}</td>
+            <td>${e.desc}</td>
+        </tr>`).join('');
+    return `
+    <div class="cenario-card">
+        <div class="cenario-head">
+            <h3>📦 O cenário: PedeJá — app de delivery de comida</h3>
+            <p>Leiam o cenário <b>inteiro</b> antes de responder qualquer etapa. Tudo o que vocês precisam está aqui — inclusive detalhes que a equipe do PedeJá acha normais.</p>
+        </div>
+
+        <h4>Arquitetura em alto nível</h4>
+        <p class="cenario-p">O PedeJá tem três clientes (app do consumidor, painel web do restaurante e app do entregador), que falam com um <b>API Gateway</b> público em <code>api.pedeja.com.br</code>. Atrás do gateway ficam três serviços — Autenticação, Pedidos e Pagamentos — todos gravando em um <b>único banco PostgreSQL</b> compartilhado. Há três integrações externas: <b>PagFácil</b> (gateway de pagamento), <b>MapaZap</b> (rotas e frete) e <b>NotifyHub</b> (notificações push).</p>
+
+        <pre class="diagrama">[App do Cliente] ───HTTPS──▶ [API Gateway] ──▶ [Serviço de Autenticação] ──▶ [Banco de Dados]
+[App do Cliente] ───HTTPS──▶ [API Gateway] ──▶ [Serviço de Pedidos] ────────▶ [Banco de Dados]
+[Painel do Restaurante] ───▶ [API Gateway] ──▶ [Serviço de Pedidos]
+[App do Entregador] ───────▶ [API Gateway] ──▶ [Serviço de Pedidos]  (envia localização a cada 10s)
+[Serviço de Pedidos] ──────▶ [Serviço de Pagamentos] ──▶ [PagFácil — externo]
+[Serviço de Pagamentos] ───▶ [Banco de Dados]  (grava as transações)
+[Serviço de Pedidos] ──────▶ [MapaZap — externo]  (cálculo de rota e frete)
+[Serviço de Pedidos] ──────▶ [NotifyHub — externo]  (push para cliente e entregador)</pre>
+
+        <h4>Endpoints da API</h4>
+        <div class="tabela-scroll"><table class="tabela-endpoints">
+            <tr><th>Método</th><th>Rota</th><th>Auth</th><th>Descrição</th></tr>
+            ${linhasEndpoints}
+        </table></div>
+
+        <h4>Autenticação</h4>
+        <p class="cenario-p">Após o login, o Serviço de Autenticação emite um <b>JWT assinado com HS256</b> (segredo único compartilhado pelos três serviços), com payload <code>{ id, email, role }</code>. O token vai no header <code>Authorization: Bearer</code>. Segundo a documentação interna: <em>"o token não tem data de expiração — ele vale até o usuário trocar a senha"</em>. Não existe refresh token nem lista de revogação. O app do cliente guarda o token no <code>localStorage</code> do WebView.</p>
+
+        <h4>Dados sensíveis manipulados</h4>
+        <p class="cenario-p">CPF, endereço residencial, telefone, <b>geolocalização em tempo real do entregador</b>, dados de cartão (número, validade e CVV) e histórico completo de pedidos.</p>
+    </div>`;
+}
+
+function renderEtapasPbl() {
+    const optsComponente = '<option value="">— componente —</option>' + COMPONENTES_PBL.map(c => `<option>${c}</option>`).join('');
+    const optsStride     = '<option value="">— categoria —</option>' + CATEGORIAS_STRIDE_PBL.map(c => `<option>${c}</option>`).join('');
+    const optsNivel      = '<option value="">—</option><option>Baixa</option><option>Média</option><option>Alta</option>';
+    const optsPrioridade = '<option value="">—</option><option>Crítica</option><option>Alta</option><option>Média</option><option>Baixa</option>';
+
+    const linhasStride = [0,1,2,3,4,5].map(i => `
+        <tr>
+            <td><select id="e2-comp-${i}" class="sel-pbl">${optsComponente}</select></td>
+            <td><input type="text" id="e2-ameaca-${i}" class="inp-pbl" placeholder="Que ataque é possível aqui?"></td>
+            <td><select id="e2-cat-${i}" class="sel-pbl">${optsStride}</select></td>
+            <td><input type="text" id="e2-impacto-${i}" class="inp-pbl" placeholder="O que acontece se der certo?"></td>
+        </tr>`).join('');
+
+    const linhasRiscos = [0,1,2,3,4].map(i => `
+        <tr>
+            <td class="td-num">${i + 1}º</td>
+            <td><input type="text" id="e4-risco-${i}" class="inp-pbl" placeholder="Descreva o risco"></td>
+            <td><select id="e4-prob-${i}" class="sel-pbl sel-curta">${optsNivel}</select></td>
+            <td><select id="e4-imp-${i}" class="sel-pbl sel-curta">${optsNivel}</select></td>
+            <td><select id="e4-prio-${i}" class="sel-pbl sel-curta">${optsPrioridade}</select></td>
+        </tr>`).join('');
+
+    return `
+    <div class="exercise-card" id="card-e1">
+        <div class="card-header">
+            <span class="card-badge" style="background:#fee2e2;color:#b91c1c;">Etapa 1 · 8 min</span>
+            <span class="card-num" id="chk-e1">⬜ não entregue</span>
+        </div>
+        <h3>🎯 Mapear a superfície de ataque</h3>
+        <div class="card-enunciado">Antes de pensar em ameaças, listem <b>por onde se entra</b> no PedeJá. Usem o diagrama e a tabela de endpoints acima.</div>
+        <label class="lbl-pbl">1. Quais são <b>todos</b> os pontos de entrada do sistema? (por onde dados de fora entram — pensem além dos endpoints)</label>
+        <textarea id="e1-p1" class="txt-pbl" rows="4" placeholder="Listem um por linha..."></textarea>
+        <label class="lbl-pbl">2. Quais integrações externas existem e que dados trafegam por cada uma?</label>
+        <textarea id="e1-p2" class="txt-pbl" rows="3" placeholder="Integração — dados que passam por ela..."></textarea>
+        <label class="lbl-pbl">3. Quais endpoints manipulam dados sensíveis? Quais chamam mais a atenção do grupo, e por quê?</label>
+        <textarea id="e1-p3" class="txt-pbl" rows="4" placeholder="Endpoint — dado sensível — por que preocupa..."></textarea>
+        <button class="btn-validar" onclick="salvarPbl('e1')">💾 Salvar Etapa 1</button>
+        <div class="feedback" id="fb-e1"></div>
+    </div>
+
+    <div class="exercise-card" id="card-e2">
+        <div class="card-header">
+            <span class="card-badge" style="background:#eef2ff;color:#4338CA;">Etapa 2 · 12 min</span>
+            <span class="card-num" id="chk-e2">⬜ não entregue</span>
+        </div>
+        <h3>🗺️ Aplicar STRIDE em pelo menos 3 componentes</h3>
+        <div class="card-enunciado">Escolham <b>pelo menos 3 componentes</b> do PedeJá e registrem uma ameaça para cada um. Perguntas para guiar a discussão: <em>quem pode fingir ser outra pessoa aqui? O que pode ser adulterado no caminho? O que vaza se este componente falhar? Dá para derrubá-lo? Alguém ganha poder que não deveria ter?</em> Preencham no mínimo 3 linhas (as 6 valem mais discussão).</div>
+        <div class="tabela-scroll"><table class="tabela-input">
+            <tr><th style="width:22%;">Componente</th><th style="width:32%;">Ameaça</th><th style="width:20%;">Categoria STRIDE</th><th style="width:26%;">Impacto</th></tr>
+            ${linhasStride}
+        </table></div>
+        <button class="btn-validar" onclick="salvarPbl('e2')">💾 Salvar Etapa 2</button>
+        <div class="feedback" id="fb-e2"></div>
+    </div>
+
+    <div class="exercise-card" id="card-e3">
+        <div class="card-header">
+            <span class="card-badge" style="background:#fef3c7;color:#b45309;">Etapa 3 · 5 min</span>
+            <span class="card-num" id="chk-e3">⬜ não entregue</span>
+        </div>
+        <h3>🔑 Avaliar a autenticação por token</h3>
+        <div class="card-enunciado">Releiam a seção <b>"Autenticação"</b> do cenário com a lupa da Aula 19.</div>
+        <label class="lbl-pbl">1. Comparando com o ciclo de vida saudável de um token, o que está <b>faltando</b> no JWT do PedeJá?</label>
+        <textarea id="e3-r1" class="txt-pbl" rows="3" placeholder="Listem o que falta..."></textarea>
+        <label class="lbl-pbl">2. Se um token de cliente vazar hoje, o que a equipe do PedeJá consegue fazer a respeito?</label>
+        <textarea id="e3-r2" class="txt-pbl" rows="2" placeholder="Pensem nos mecanismos que existem (ou não) no cenário..."></textarea>
+        <label class="lbl-pbl">3. Registrem <b>pelo menos 2 riscos</b> ligados à autenticação, cada um com sua consequência.</label>
+        <textarea id="e3-riscos" class="txt-pbl" rows="4" placeholder="Risco 1: ... → consequência: ...&#10;Risco 2: ... → consequência: ..."></textarea>
+        <button class="btn-validar" onclick="salvarPbl('e3')">💾 Salvar Etapa 3</button>
+        <div class="feedback" id="fb-e3"></div>
+    </div>
+
+    <div class="exercise-card" id="card-e4">
+        <div class="card-header">
+            <span class="card-badge" style="background:#dcfce7;color:#15803d;">Entrega Final · 5 min</span>
+            <span class="card-num" id="chk-e4">⬜ não entregue</span>
+        </div>
+        <h3>⚖️ Tabela de riscos priorizados</h3>
+        <div class="card-enunciado">Este é o <b>produto final do grupo</b>: peguem tudo o que encontraram nas etapas anteriores e escolham os <b>3 a 5 riscos mais importantes</b> do PedeJá, em ordem de prioridade (o 1º é o que vocês corrigiriam primeiro). Cada risco recebe probabilidade, impacto e prioridade. É esta tabela que será discutida com a turma no gabarito.</div>
+        <div class="tabela-scroll"><table class="tabela-input">
+            <tr><th style="width:6%;">#</th><th style="width:46%;">Risco</th><th style="width:16%;">Probabilidade</th><th style="width:16%;">Impacto</th><th style="width:16%;">Prioridade</th></tr>
+            ${linhasRiscos}
+        </table></div>
+        <button class="btn-validar" onclick="salvarPbl('e4')">💾 Entregar Tabela Final</button>
+        <div class="feedback" id="fb-e4"></div>
+    </div>`;
+}
+
+const estiloPbl = `
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'IBM Plex Sans', system-ui, sans-serif; background: #f0fdfa; color: #0f172a; }
+    .container { display: flex; min-height: 100vh; }
+    .sidebar { width: 280px; min-height: 100vh; background: #fff; border-right: 1px solid #ccfbf1; padding: 24px 16px; position: sticky; top: 0; overflow-y: auto; max-height: 100vh; flex-shrink: 0; }
+    .sidebar-brand h2 { font-size: 15px; color: #0F766E; margin-bottom: 4px; }
+    .sidebar-brand p  { font-size: 12px; color: #0d9488; }
+    .contador-box { background: #ccfbf1; border-radius: 8px; padding: 10px 14px; margin: 14px 0; }
+    .contador-box p { font-size: 13px; font-weight: 700; color: #0F766E; }
+    .tempo-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 11px; color: #475569; line-height: 1.8; }
+    .tempo-box b { color: #0F766E; }
+    .surf-section-title { font-size: 10px; font-weight: 700; color: #94A3B8; text-transform: uppercase; letter-spacing: .08em; margin: 16px 0 8px; }
+    .surf-hint { font-size: 11px; color: #94A3B8; margin-bottom: 10px; }
+    .surf-category { border: 1px solid #ccfbf1; border-radius: 8px; margin-bottom: 8px; overflow: hidden; }
+    .surf-cat-header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; cursor: pointer; background: #f0fdfa; }
+    .surf-icon { font-size: 16px; }
+    .surf-cat-name { flex: 1; font-size: 12px; font-weight: 600; color: #0F766E; }
+    .surf-cat-arrow { font-size: 10px; color: #0d9488; transition: transform .2s; }
+    .surf-cat-body { display: none; padding: 10px 12px; font-size: 12px; line-height: 1.6; color: #374151; background: #fff; border-top: 1px solid #ccfbf1; }
+    .surf-cat-body code { background: #ccfbf1; padding: 1px 5px; border-radius: 3px; font-size: 11px; color: #0F766E; }
+    .sidebar-actions { margin-top: 20px; display: flex; flex-direction: column; gap: 8px; }
+    .btn-reset  { background: #ccfbf1; color: #0F766E; border: 1px solid #99f6e4; border-radius: 8px; padding: 9px; font-size: 12px; cursor: pointer; }
+    .btn-logout { background: #fee2e2; color: #b91c1c; border-radius: 8px; padding: 9px; font-size: 12px; text-align: center; text-decoration: none; }
+    .btn-hub    { background: #f1f5f9; color: #475569; border-radius: 8px; padding: 9px; font-size: 12px; text-align: center; text-decoration: none; }
+    .main { flex: 1; padding: 32px 28px; max-width: 900px; }
+    .main-header { margin-bottom: 20px; }
+    .main-header h2 { font-size: 22px; color: #0F766E; margin-bottom: 6px; }
+    .main-header p  { font-size: 13px; color: #0d9488; }
+    .metodo-box { background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 14px 18px; margin-bottom: 24px; font-size: 13px; color: #78350f; line-height: 1.7; }
+    .cenario-card { background: #fff; border: 1px solid #ccfbf1; border-radius: 14px; padding: 24px; margin-bottom: 26px; box-shadow: 0 2px 8px rgba(15,118,110,.07); }
+    .cenario-head h3 { font-size: 17px; color: #0F766E; margin-bottom: 6px; }
+    .cenario-head p { font-size: 13px; color: #64748b; margin-bottom: 16px; }
+    .cenario-card h4 { font-size: 13px; color: #0F766E; text-transform: uppercase; letter-spacing: .04em; margin: 18px 0 8px; }
+    .cenario-p { font-size: 13px; color: #374151; line-height: 1.7; }
+    .cenario-p code, .cenario-card td code { background: #f0fdfa; padding: 1px 5px; border-radius: 3px; font-size: 12px; color: #0F766E; }
+    .diagrama { background: #0f172a; color: #99f6e4; border-radius: 10px; padding: 16px; font-size: 11.5px; line-height: 1.9; overflow-x: auto; margin: 8px 0; }
+    .tabela-scroll { overflow-x: auto; margin: 8px 0 4px; }
+    .tabela-endpoints { border-collapse: collapse; width: 100%; }
+    .tabela-endpoints th { background: #0F766E; color: #fff; font-size: 11px; padding: 7px 9px; text-align: left; }
+    .tabela-endpoints td { border: 1px solid #ccfbf1; font-size: 12px; padding: 8px 9px; color: #374151; line-height: 1.5; vertical-align: top; }
+    .metodo { font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 5px; }
+    .metodo-get  { background: #dcfce7; color: #15803d; }
+    .metodo-post { background: #dbeafe; color: #1d4ed8; }
+    .exercise-card { background: #fff; border: 1px solid #ccfbf1; border-radius: 14px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(15,118,110,.07); }
+    .exercise-card.concluido { border-color: #16a34a; background: #f0fdf4; }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .card-badge { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
+    .card-num   { font-size: 11px; color: #94A3B8; }
+    .exercise-card h3 { font-size: 16px; color: #0f172a; margin-bottom: 10px; }
+    .card-enunciado { font-size: 13px; color: #374151; line-height: 1.7; margin-bottom: 16px; }
+    .lbl-pbl { display: block; font-size: 12.5px; font-weight: 600; color: #334155; margin: 12px 0 6px; line-height: 1.5; }
+    .txt-pbl { width: 100%; border: 1px solid #99f6e4; border-radius: 8px; padding: 10px 14px; font-size: 13px; font-family: inherit; outline: none; resize: vertical; }
+    .txt-pbl:focus { border-color: #0F766E; box-shadow: 0 0 0 3px #0f766e20; }
+    .tabela-input { border-collapse: collapse; width: 100%; margin-bottom: 6px; }
+    .tabela-input th { background: #0F766E; color: #fff; font-size: 11px; padding: 7px 8px; text-align: left; }
+    .tabela-input td { border: 1px solid #ccfbf1; padding: 4px; vertical-align: middle; }
+    .td-num { text-align: center; font-size: 12px; font-weight: 700; color: #0F766E; }
+    .inp-pbl { width: 100%; border: 1px solid #e2e8f0; border-radius: 6px; padding: 7px 9px; font-size: 12px; outline: none; }
+    .inp-pbl:focus { border-color: #0F766E; }
+    .sel-pbl { width: 100%; border: 1px solid #e2e8f0; border-radius: 6px; padding: 7px 6px; font-size: 12px; outline: none; background: #fff; color: #334155; }
+    .sel-curta { min-width: 80px; }
+    .btn-validar { background: #0F766E; color: white; border: none; border-radius: 8px; padding: 10px 22px; font-size: 13px; font-weight: 600; cursor: pointer; margin: 12px 0 10px; }
+    .btn-validar:hover { opacity: .88; }
+    .feedback { font-size: 13px; font-weight: 600; min-height: 20px; }
+`;
+
+const scriptPbl = `
+    var ETAPAS = ['e1','e2','e3','e4'];
+    function toggleConceitoPbl(i){
+        var b=document.getElementById('pblconceito-'+i);
+        var a=document.getElementById('pblarrow-'+i);
+        if(b.style.display==='block'){ b.style.display='none'; a.style.transform=''; }
+        else { b.style.display='block'; a.style.transform='rotate(90deg)'; }
+    }
+    function coletarPbl(etapa){
+        function val(id){ var el=document.getElementById(id); return el ? el.value : ''; }
+        if(etapa==='e1') return { p1: val('e1-p1'), p2: val('e1-p2'), p3: val('e1-p3') };
+        if(etapa==='e3') return { r1: val('e3-r1'), r2: val('e3-r2'), riscos: val('e3-riscos') };
+        if(etapa==='e2'){
+            var linhas=[];
+            for(var i=0;i<6;i++) linhas.push({ componente: val('e2-comp-'+i), ameaca: val('e2-ameaca-'+i), categoria: val('e2-cat-'+i), impacto: val('e2-impacto-'+i) });
+            return { linhas: linhas };
+        }
+        if(etapa==='e4'){
+            var l2=[];
+            for(var j=0;j<5;j++) l2.push({ risco: val('e4-risco-'+j), prob: val('e4-prob-'+j), impacto: val('e4-imp-'+j), prioridade: val('e4-prio-'+j) });
+            return { linhas: l2 };
+        }
+        return {};
+    }
+    function preencherPbl(etapa, r){
+        function set(id, v){ var el=document.getElementById(id); if(el) el.value = v || ''; }
+        if(!r) return;
+        if(etapa==='e1'){ set('e1-p1', r.p1); set('e1-p2', r.p2); set('e1-p3', r.p3); }
+        if(etapa==='e3'){ set('e3-r1', r.r1); set('e3-r2', r.r2); set('e3-riscos', r.riscos); }
+        if(etapa==='e2' && r.linhas) r.linhas.forEach(function(l, i){
+            set('e2-comp-'+i, l.componente); set('e2-ameaca-'+i, l.ameaca); set('e2-cat-'+i, l.categoria); set('e2-impacto-'+i, l.impacto);
+        });
+        if(etapa==='e4' && r.linhas) r.linhas.forEach(function(l, i){
+            set('e4-risco-'+i, l.risco); set('e4-prob-'+i, l.prob); set('e4-imp-'+i, l.impacto); set('e4-prio-'+i, l.prioridade);
+        });
+    }
+    function marcarEntregue(etapa, entregue){
+        var card=document.getElementById('card-'+etapa);
+        var chk=document.getElementById('chk-'+etapa);
+        if(entregue){ if(card) card.classList.add('concluido'); if(chk) chk.textContent='✅ entregue'; }
+        else { if(card) card.classList.remove('concluido'); if(chk) chk.textContent='⬜ não entregue'; }
+        var done=document.querySelectorAll('.exercise-card.concluido').length;
+        var el=document.getElementById('contador-progresso');
+        if(el) el.textContent = done + ' / 4 etapas entregues';
+    }
+    async function carregarPbl(){
+        try{
+            var r=await fetch('/pbl/lab/respostas');
+            var d=await r.json();
+            ETAPAS.forEach(function(et){
+                var reg=(d.etapas||{})[et];
+                if(reg){ preencherPbl(et, reg.respostas); marcarEntregue(et, reg.entregue); }
+            });
+        }catch(e){}
+    }
+    async function salvarPbl(etapa){
+        var fb=document.getElementById('fb-'+etapa);
+        fb.textContent='⏳ Salvando...'; fb.style.color='#64748b';
+        try{
+            var r=await fetch('/pbl/lab/salvar',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ etapa: etapa, respostas: coletarPbl(etapa) }) });
+            var d=await r.json();
+            if(!d.sucesso){ fb.textContent='⚠️ Erro ao salvar. Tente de novo.'; fb.style.color='#b45309'; return; }
+            marcarEntregue(etapa, d.entregue);
+            if(d.entregue){ fb.textContent='✅ Etapa salva e entregue!'; fb.style.color='#16a34a'; }
+            else { fb.textContent='💾 Rascunho salvo — ' + (d.motivo || 'complete os campos para entregar.'); fb.style.color='#b45309'; }
+        }catch(e){ fb.textContent='⚠️ Erro de conexão.'; fb.style.color='#b45309'; }
+    }
+    async function resetarPbl(){
+        if(!confirm('Apagar todas as suas respostas deste laboratório?')) return;
+        try{
+            await fetch('/pbl/lab/reset',{ method:'POST' });
+            location.reload();
+        }catch(e){}
+    }
+    carregarPbl();
+`;
+
+app.get('/pbl', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'pbl-login.html'));
+});
+
+app.post('/pbl/login', (req, res) => {
+    const usuario = String(req.body.usuario || '').trim().toLowerCase();
+    const senha   = String(req.body.senha   || '').trim();
+    const conta   = CREDENCIAIS_PBL[usuario];
+    if (!conta || conta.senha !== senha) return res.redirect('/pbl?erro=1');
+    req.session.pblAluno = usuario;
+    req.session.pblNome  = conta.nomeExibicao;
+    res.redirect('/pbl/lab');
+});
+
+app.get('/pbl/logout', (req, res) => {
+    req.session.pblAluno = null;
+    req.session.pblNome  = null;
+    res.redirect('/pbl');
+});
+
+app.get('/pbl/lab', exigirLoginPbl, (req, res) => {
+    const nome = req.session.pblNome;
+    res.send(`<!DOCTYPE html><html lang="pt-BR"><head>
+        <meta charset="UTF-8">
+        <title>PBL: Mapear Ameaças e Riscos — ${escapeHtml(nome)}</title>
+        <style>${estiloPbl}</style>
+    </head><body>
+    <div class="container">
+        <div class="sidebar">
+            <div class="sidebar-brand">
+                <h2>🧭 PBL: Ameaças e Riscos</h2>
+                <p>Olá, <strong>${escapeHtml(nome)}</strong></p>
+            </div>
+            <div class="contador-box">
+                <p id="contador-progresso">0 / 4 etapas entregues</p>
+            </div>
+            <div class="tempo-box">
+                ⏱️ <b>Tempo do exercício: 30 min</b><br>
+                Etapa 1 — Superfície: <b>8 min</b><br>
+                Etapa 2 — STRIDE: <b>12 min</b><br>
+                Etapa 3 — Autenticação: <b>5 min</b><br>
+                Entrega final: <b>5 min</b>
+            </div>
+            <div class="surf-section-title">Conceitos (relembrar)</div>
+            <p class="surf-hint">Clique em um conceito se travar em alguma etapa.</p>
+            ${renderSidebarPbl()}
+            <div class="sidebar-actions">
+                <button class="btn-reset" onclick="resetarPbl()">🔄 Resetar Respostas</button>
+                <a href="/pbl/logout" class="btn-logout">🚪 Sair</a>
+                <a href="/" class="btn-hub">← Voltar ao Hub</a>
+            </div>
+        </div>
+        <div class="main">
+            <div class="main-header">
+                <h2>🧭 PBL: Mapear Ameaças e Riscos em uma Aplicação com API</h2>
+                <p>Consolidação da Semana 4 — Threat Modeling, superfície de ataque, segurança em APIs e tokens.</p>
+            </div>
+            <div class="metodo-box">
+                👥 <b>Trabalho em grupo:</b> discutam cada etapa juntos, mas <b>cada integrante registra as respostas no seu próprio login</b> — pode dividir quem digita o quê e depois igualar. Respostas dissertativas: aqui não existe "validar", existe argumentar. O gabarito vem na explicação do instrutor, ao final. As respostas ficam salvas mesmo se a página recarregar.
+            </div>
+            ${renderCenarioPbl()}
+            ${renderEtapasPbl()}
+        </div>
+    </div>
+    <script>${scriptPbl}</script>
+    </body></html>`);
+});
+
+app.get('/pbl/lab/respostas', exigirLoginPbl, async (req, res) => {
+    const aluno = req.session.pblAluno;
+    try {
+        const r = await pool.query('SELECT etapa, respostas, entregue FROM pbl_respostas WHERE aluno=$1', [aluno]);
+        const etapas = {};
+        r.rows.forEach(row => { etapas[row.etapa] = { respostas: row.respostas, entregue: row.entregue }; });
+        res.json({ etapas });
+    } catch (err) { res.status(500).json({ erro: err.message }); }
+});
+
+app.post('/pbl/lab/salvar', exigirLoginPbl, async (req, res) => {
+    const aluno = req.session.pblAluno;
+    const { etapa, respostas } = req.body;
+    if (!ETAPAS_PBL.some(e => e.id === etapa) || typeof respostas !== 'object' || respostas === null) {
+        return res.status(400).json({ sucesso: false, erro: 'Etapa ou respostas inválidas' });
+    }
+    const entregue = etapaPblCompleta(etapa, respostas);
+    const motivos = {
+        e1: 'responda as 3 perguntas para entregar.',
+        e2: 'preencha pelo menos 3 linhas completas para entregar.',
+        e3: 'responda as 2 perguntas e registre pelo menos 2 riscos para entregar.',
+        e4: 'preencha pelo menos 3 riscos completos para entregar.',
+    };
+    try {
+        await pool.query(
+            `INSERT INTO pbl_respostas (aluno, etapa, respostas, entregue)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (aluno, etapa) DO UPDATE SET respostas = $3, entregue = $4, atualizado_em = NOW()`,
+            [aluno, etapa, JSON.stringify(respostas), entregue]
+        );
+        res.json({ sucesso: true, entregue, motivo: entregue ? null : motivos[etapa] });
+    } catch (err) { res.status(500).json({ sucesso: false, erro: err.message }); }
+});
+
+app.post('/pbl/lab/reset', exigirLoginPbl, async (req, res) => {
+    const aluno = req.session.pblAluno;
+    try {
+        await pool.query('DELETE FROM pbl_respostas WHERE aluno=$1', [aluno]);
+        res.json({ sucesso: true });
+    } catch (err) { res.status(500).json({ sucesso: false, erro: err.message }); }
+});
+
+app.get('/pbl/painel-professor/dados', async (req, res) => {
+    try {
+        const r = await pool.query('SELECT aluno, etapa, entregue FROM pbl_respostas');
+        const dados = {};
+        r.rows.forEach(row => { dados[row.aluno + ':' + row.etapa] = row.entregue ? 'entregue' : 'rascunho'; });
+        res.json({
+            dados,
+            alunos: ALUNOS_PBL.map(a => ({ u: a.usuario, n: a.nomeExibicao })),
+            etapas: ETAPAS_PBL.map(e => ({ id: e.id, nome: e.nome })),
+        });
+    } catch (err) { res.status(500).json({ erro: err.message }); }
+});
+
+app.get('/pbl/painel-professor/respostas', async (req, res) => {
+    const aluno = String(req.query.aluno || '').trim().toLowerCase();
+    if (!CREDENCIAIS_PBL[aluno]) return res.status(400).json({ erro: 'Aluno desconhecido' });
+    try {
+        const r = await pool.query('SELECT etapa, respostas, entregue, atualizado_em FROM pbl_respostas WHERE aluno=$1', [aluno]);
+        const etapas = {};
+        r.rows.forEach(row => { etapas[row.etapa] = { respostas: row.respostas, entregue: row.entregue, atualizado: row.atualizado_em }; });
+        res.json({ aluno, nome: CREDENCIAIS_PBL[aluno].nomeExibicao, etapas });
+    } catch (err) { res.status(500).json({ erro: err.message }); }
+});
+
+app.get('/pbl/painel-professor', (req, res) => {
+    res.send(`<!DOCTYPE html><html lang="pt-BR"><head>
+    <meta charset="UTF-8"><title>Painel Professor — PBL: Ameaças e Riscos</title>
+    <style>
+        * { box-sizing:border-box; margin:0; padding:0; }
+        body { font-family:system-ui,sans-serif; background:#f0fdfa; color:#0f172a; padding:28px; }
+        h1 { color:#0F766E; margin-bottom:4px; font-size:22px; }
+        .sub { color:#64748b; font-size:13px; margin-bottom:20px; }
+        table.status { border-collapse:collapse; background:#fff; margin-bottom:26px; }
+        table.status th, table.status td { border:1px solid #99f6e4; text-align:center; font-size:13px; }
+        table.status th { background:#0F766E; color:#fff; padding:6px 10px; font-size:11px; }
+        table.status td { padding:8px 10px; }
+        td.nome { text-align:left; font-weight:600; padding:8px 12px; white-space:nowrap; cursor:pointer; color:#0F766E; text-decoration:underline; }
+        td.total { font-weight:800; color:#0F766E; }
+        .ok { background:#f0fdf4; } .parcial { background:#fffbeb; } .no { background:#fafafa; }
+        #status { font-size:11px; color:#64748b; margin-top:-14px; margin-bottom:24px; }
+        #detalhe { background:#fff; border:1px solid #99f6e4; border-radius:12px; padding:22px; max-width:980px; display:none; }
+        #detalhe h2 { color:#0F766E; font-size:17px; margin-bottom:14px; }
+        #detalhe h3 { color:#334155; font-size:14px; margin:18px 0 8px; border-bottom:1px solid #e2e8f0; padding-bottom:4px; }
+        #detalhe .pergunta { font-size:12px; font-weight:700; color:#0F766E; margin:10px 0 3px; }
+        #detalhe .resposta { font-size:13px; color:#374151; white-space:pre-wrap; background:#f8fafc; border-radius:6px; padding:8px 12px; line-height:1.6; }
+        #detalhe table { border-collapse:collapse; width:100%; margin-top:6px; }
+        #detalhe table th { background:#0F766E; color:#fff; font-size:11px; padding:6px 8px; text-align:left; }
+        #detalhe table td { border:1px solid #ccfbf1; font-size:12px; padding:6px 8px; color:#374151; }
+        .tag-entregue { font-size:11px; font-weight:700; color:#15803d; }
+        .tag-rascunho { font-size:11px; font-weight:700; color:#b45309; }
+        .vazio { font-size:12px; color:#94A3B8; font-style:italic; }
+        .hint { font-size:12px; color:#64748b; margin-bottom:10px; }
+    </style></head><body>
+    <h1>🧭 Painel do Professor — PBL: Mapear Ameaças e Riscos</h1>
+    <div class="sub">Aula 20 · status atualiza a cada 5s · clique no nome do aluno para ler as respostas</div>
+    <div id="tabela">Carregando...</div>
+    <div id="status">🟡 Aguardando...</div>
+    <div id="detalhe"></div>
+    <script>
+    var NOMES_ETAPAS = { e1:'Etapa 1 — Superfície de Ataque', e2:'Etapa 2 — STRIDE', e3:'Etapa 3 — Autenticação por Token', e4:'Entrega Final — Riscos Priorizados' };
+    function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    async function poll(){
+        try{
+            var r=await fetch('/pbl/painel-professor/dados');
+            var d=await r.json();
+            var h='<table class="status"><tr><th>Aluno</th>';
+            d.etapas.forEach(function(e){ h+='<th>'+esc(e.nome)+'</th>'; });
+            h+='<th>Total</th></tr>';
+            d.alunos.forEach(function(a){
+                var tot=0;
+                var linha='<td class="nome" onclick="verRespostas(\\''+a.u+'\\')">'+esc(a.n)+'</td>';
+                d.etapas.forEach(function(e){
+                    var st=d.dados[a.u+':'+e.id];
+                    if(st==='entregue'){ tot++; linha+='<td class="ok">✅</td>'; }
+                    else if(st==='rascunho'){ linha+='<td class="parcial">📝</td>'; }
+                    else linha+='<td class="no">⬜</td>';
+                });
+                h+='<tr>'+linha+'<td class="total">'+tot+'/'+d.etapas.length+'</td></tr>';
+            });
+            h+='</table>';
+            document.getElementById('tabela').innerHTML=h;
+            document.getElementById('status').textContent='🟢 Atualizado: '+new Date().toLocaleTimeString('pt-BR')+' · ✅ entregue · 📝 rascunho salvo';
+        }catch(e){ document.getElementById('status').textContent='🔴 Falha: '+e.message; }
+    }
+    function blocoTexto(rotulo, valor){
+        return '<div class="pergunta">'+esc(rotulo)+'</div><div class="resposta">'+(valor && String(valor).trim() ? esc(valor) : '<span class="vazio">(em branco)</span>')+'</div>';
+    }
+    function tabelaLinhas(colunas, linhas, campos){
+        var t='<table><tr>'; colunas.forEach(function(c){ t+='<th>'+esc(c)+'</th>'; }); t+='</tr>';
+        var alguma=false;
+        (linhas||[]).forEach(function(l){
+            var temAlgo = campos.some(function(c){ return l && String(l[c]||'').trim(); });
+            if(!temAlgo) return;
+            alguma=true;
+            t+='<tr>'; campos.forEach(function(c){ t+='<td>'+esc(l[c]||'')+'</td>'; }); t+='</tr>';
+        });
+        t+='</table>';
+        return alguma ? t : '<div class="vazio">(nenhuma linha preenchida)</div>';
+    }
+    async function verRespostas(aluno){
+        var det=document.getElementById('detalhe');
+        det.style.display='block';
+        det.innerHTML='⏳ Carregando respostas...';
+        try{
+            var r=await fetch('/pbl/painel-professor/respostas?aluno='+encodeURIComponent(aluno));
+            var d=await r.json();
+            var h='<h2>📋 Respostas de '+esc(d.nome)+'</h2>';
+            ['e1','e2','e3','e4'].forEach(function(et){
+                var reg=d.etapas[et];
+                h+='<h3>'+NOMES_ETAPAS[et]+' ';
+                if(!reg){ h+='<span class="vazio">— nada salvo</span></h3>'; return; }
+                h+=(reg.entregue ? '<span class="tag-entregue">✅ entregue</span>' : '<span class="tag-rascunho">📝 rascunho</span>')+'</h3>';
+                var resp=reg.respostas||{};
+                if(et==='e1'){
+                    h+=blocoTexto('1. Pontos de entrada', resp.p1);
+                    h+=blocoTexto('2. Integrações externas e dados', resp.p2);
+                    h+=blocoTexto('3. Endpoints com dados sensíveis', resp.p3);
+                } else if(et==='e2'){
+                    h+=tabelaLinhas(['Componente','Ameaça','Categoria STRIDE','Impacto'], resp.linhas, ['componente','ameaca','categoria','impacto']);
+                } else if(et==='e3'){
+                    h+=blocoTexto('1. O que falta no ciclo de vida do token', resp.r1);
+                    h+=blocoTexto('2. O que dá para fazer se um token vazar', resp.r2);
+                    h+=blocoTexto('3. Riscos da autenticação (mín. 2)', resp.riscos);
+                } else if(et==='e4'){
+                    h+=tabelaLinhas(['Risco','Probabilidade','Impacto','Prioridade'], resp.linhas, ['risco','prob','impacto','prioridade']);
+                }
+            });
+            det.innerHTML=h;
+            det.scrollIntoView({ behavior:'smooth' });
+        }catch(e){ det.innerHTML='🔴 Falha ao carregar: '+esc(e.message); }
+    }
+    poll(); setInterval(poll,5000);
+    </script></body></html>`);
+});
+
 // Inicialização da porta dinâmica (Render ou Local)
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🔥 Servidor do Laboratório iniciado com sucesso na porta ${PORT}`));
